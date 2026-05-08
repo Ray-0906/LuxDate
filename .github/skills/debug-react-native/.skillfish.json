@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "debug-react-native",
+  "owner": "snakeo",
+  "repo": "claude-debug-and-refactor-skills-plugin",
+  "path": "plugins/debug-and-refactor/skills/debug-react-native",
+  "branch": "master",
+  "sha": "28af276c2883e776f2ae20b685f8800ae1949a85",
+  "source": "manual"
+}
