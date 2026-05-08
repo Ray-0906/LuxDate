@@ -20,6 +20,7 @@ import ProfileScreen from '../screens/Me/ProfileScreen.jsx';
 // Stack Screens
 import GirlProfileScreen from '../screens/GirlProfile/GirlProfileScreen.jsx';
 import IncomingCallScreen from '../screens/IncomingCall/IncomingCallScreen.jsx';
+import OutgoingCallScreen from '../screens/OutgoingCall/OutgoingCallScreen.jsx';
 import VideoCallScreen from '../screens/VideoCall/VideoCallScreen.jsx';
 
 export const navigationRef = createNavigationContainerRef();
@@ -94,6 +95,11 @@ function AppStack() {
       <Stack.Screen
         name="IncomingCall"
         component={IncomingCallScreen}
+        options={{ animation: 'fade', presentation: 'fullScreenModal' }}
+      />
+      <Stack.Screen
+        name="OutgoingCall"
+        component={OutgoingCallScreen}
         options={{ animation: 'fade', presentation: 'fullScreenModal' }}
       />
       <Stack.Screen

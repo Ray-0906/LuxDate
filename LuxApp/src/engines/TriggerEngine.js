@@ -18,6 +18,12 @@ class TriggerEngine {
     this.maxSessionCalls = 8;
     this.onIncomingCall = null; // callback: (callData) => void
     this.isActive = true;
+    this.isBlockedContext = false; // Block triggers during active manual calls
+  }
+
+  setBlockedContext(isBlocked) {
+    this.isBlockedContext = isBlocked;
+    if (isBlocked) this.cancelScheduled();
   }
 
   /**
@@ -33,6 +39,7 @@ class TriggerEngine {
   canFire() {
     return (
       this.isActive &&
+      !this.isBlockedContext &&
       this.sessionCallCount < this.maxSessionCalls &&
       CooldownManager.canFire()
     );
@@ -85,9 +92,18 @@ class TriggerEngine {
    * making it feel much more organic.
    */
   scheduleProfileTrigger(girlId, delayMs = 5000) {
-    setTimeout(() => {
+    this.cancelScheduled();
+    this.scheduledTimer = setTimeout(() => {
       this.fire('profile_visit', girlId);
+      this.scheduledTimer = null;
     }, delayMs);
+  }
+
+  cancelScheduled() {
+    if (this.scheduledTimer) {
+      clearTimeout(this.scheduledTimer);
+      this.scheduledTimer = null;
+    }
   }
 
   /**

@@ -60,12 +60,16 @@ export default function IncomingCallScreen({ route, navigation }) {
     Vibration.cancel();
     
     try {
+      let finalCallData = { ...callData };
       if (callId) {
-        await callsApi.accept(callId);
+        const response = await callsApi.accept(callId);
+        const { coinBalance, costPerMinute } = response?.data?.data || {};
+        if (coinBalance !== undefined) finalCallData.coinBalance = coinBalance;
+        if (costPerMinute !== undefined) finalCallData.costPerMinute = costPerMinute;
       }
       // Navigate to video call screen on success
       navigation.replace('VideoCall', {
-        callData: { girl, callId, videoUrl, triggerType, callType }
+        callData: finalCallData
       });
     } catch (e) {
       // 402 Payment Required or other error

@@ -7,6 +7,8 @@ import { VideoView, useVideoPlayer } from 'react-native-video';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import theme from '../../theme/theme.js';
 import { callsApi } from '../../api/services.js';
+import useAuthStore from '../../store/authStore.js';
+import TriggerEngine from '../../engines/TriggerEngine.js';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -15,9 +17,18 @@ const { width: W, height: H } = Dimensions.get('window');
  */
 export default function VideoCallScreen({ route, navigation }) {
   const callData = route.params?.callData || route.params || {};
-  const { girl, callId, videoUrl, triggerType, callType } = callData;
+  const { girl, callId, videoUrl, triggerType, callType, coinBalance, costPerMinute = 10 } = callData;
+  const loadProfile = useAuthStore(state => state.loadProfile);
   const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    TriggerEngine.setBlockedContext(true);
+    TriggerEngine.cancelScheduled(); // Destroy any late ghost calls just to be safe
+    return () => TriggerEngine.setBlockedContext(false);
+  }, []);
   const [isMuted, setIsMuted] = useState(false);
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [isLocalVideoDisabled, setIsLocalVideoDisabled] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const timerRef = useRef(null);
   const startTimeRef = useRef(Date.now());
@@ -39,8 +50,14 @@ export default function VideoCallScreen({ route, navigation }) {
 
   useEffect(() => {
     if (!player) return;
-    const subLoad = player.addEventListener('onLoad', () => setIsVideoReady(true));
-    const subReady = player.addEventListener('onReadyToDisplay', () => setIsVideoReady(true));
+    const subLoad = player.addEventListener('onLoad', () => {
+      setIsVideoReady(true);
+      startTimeRef.current = Date.now();
+    });
+    const subReady = player.addEventListener('onReadyToDisplay', () => {
+      setIsVideoReady(true);
+      startTimeRef.current = Date.now();
+    });
     const subError = player.addEventListener('onError', e => console.log('Video Error:', e));
     return () => {
       subLoad.remove();
@@ -58,6 +75,7 @@ export default function VideoCallScreen({ route, navigation }) {
   useEffect(() => {
     // Start timer
     timerRef.current = setInterval(() => {
+      if (!isVideoReady) return;
       const currentElapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
       setElapsed(currentElapsed);
       
@@ -65,12 +83,22 @@ export default function VideoCallScreen({ route, navigation }) {
       if (callType?.toUpperCase() === 'FREE' && currentElapsed >= 30) {
         handleEnd(); // End the call exactly at 30s
       }
+
+      // Paid Call Dynamic Limit Cutoff
+      if (callType?.toUpperCase() === 'PAID') {
+        const safeCoinBalance = coinBalance || 0;
+        const safeCostPerMinute = costPerMinute || 10;
+        const maxTimeInSeconds = Math.floor(safeCoinBalance / safeCostPerMinute) * 60;
+        if (currentElapsed >= maxTimeInSeconds) {
+          handleEnd();
+        }
+      }
     }, 1000);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [callType]);
+  }, [callType, coinBalance, costPerMinute, isVideoReady]);
 
   const formatTime = useCallback((secs) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -81,10 +109,19 @@ export default function VideoCallScreen({ route, navigation }) {
   const handleEnd = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
     try {
-      await callsApi.end(callId, { status: 'accepted' });
-    } catch {}
+      const res = await callsApi.end(callId, { status: 'accepted' });
+      if (res?.data?.data?.coinBalance !== undefined) {
+        const authStore = useAuthStore.getState();
+        authStore.setUser({ ...authStore.user, coinBalance: res.data.data.coinBalance });
+      }
+      await loadProfile(); // refresh remaining state dynamically if needed
+    } catch (e) {
+      console.log('End call error:', e);
+    }
     if (navigation.canGoBack()) {
         navigation.goBack();
+    } else {
+        navigation.navigate('Inbox'); // Fallback if no history
     }
   };
 
@@ -120,7 +157,7 @@ export default function VideoCallScreen({ route, navigation }) {
       )}
 
       {/* Local User PiP Camera */}
-      {hasPermission && device && (
+      {hasPermission && device && !isLocalVideoDisabled && (
         <View style={styles.pipContainer}>
           <Camera
             style={StyleSheet.absoluteFill}
@@ -142,15 +179,29 @@ export default function VideoCallScreen({ route, navigation }) {
             <Text style={styles.timer}>{formatTime(elapsed)}</Text>
           </View>
         </View>
+
+        <Pressable
+          style={[styles.miniControlBtn, isMuted && styles.controlBtnActive]}
+          onPress={() => setIsMuted(!isMuted)}
+        >
+          <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={20} color="#FFF" />
+        </Pressable>
       </View>
 
       {/* Bottom controls */}
       <View style={styles.controls}>
         <Pressable
-          style={[styles.controlBtn, isMuted && styles.controlBtnActive]}
-          onPress={() => setIsMuted(!isMuted)}
+          style={[styles.controlBtn, isMicMuted && styles.controlBtnActive]}
+          onPress={() => setIsMicMuted(!isMicMuted)}
         >
-          <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={24} color="#FFF" />
+          <Ionicons name={isMicMuted ? 'mic-off' : 'mic'} size={24} color="#FFF" />
+        </Pressable>
+
+        <Pressable
+          style={[styles.controlBtn, isLocalVideoDisabled && styles.controlBtnActive]}
+          onPress={() => setIsLocalVideoDisabled(!isLocalVideoDisabled)}
+        >
+          <Ionicons name={isLocalVideoDisabled ? 'videocam-off' : 'videocam'} size={24} color="#FFF" />
         </Pressable>
 
         <Pressable style={[styles.controlBtn, styles.endCallBtn]} onPress={handleEnd}>
@@ -158,7 +209,7 @@ export default function VideoCallScreen({ route, navigation }) {
         </Pressable>
 
         <Pressable style={styles.controlBtn}>
-          <Ionicons name="gift-outline" size={24} color="#FFF" />
+          <Ionicons name="gift" size={24} color="#FFF" />
         </Pressable>
       </View>
     </View>
@@ -178,6 +229,7 @@ const styles = StyleSheet.create({
   topBar: {
     position: 'absolute', top: 0, left: 0, right: 0,
     paddingTop: 60, paddingHorizontal: 20, paddingBottom: 16,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
   pipContainer: {
@@ -194,14 +246,19 @@ const styles = StyleSheet.create({
   connectingText: { fontSize: 18, fontWeight: '600', color: '#FFF', letterSpacing: 1 },
   controls: {
     position: 'absolute', bottom: 50, left: 0, right: 0,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 30,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 15,
   },
   controlBtn: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 50, height: 50, borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center', justifyContent: 'center',
   },
-  controlBtnActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
+  miniControlBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  controlBtnActive: { backgroundColor: 'rgba(255,255,255,0.4)' },
   endCallBtn: {
     width: 64, height: 64, borderRadius: 32,
     backgroundColor: theme.colors.accentRed,

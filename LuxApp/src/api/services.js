@@ -17,7 +17,7 @@ export const profilesApi = {
 
 export const callsApi = {
   trigger: (girlId) => api.get('/calls/trigger', { params: { girlId } }),
-  accept: (callId) => api.post(`/calls/${callId}/accept`),
+  accept: (callId, config) => api.post(`/calls/${callId}/accept`, {}, config || {}),
   end: (callId, data) => api.post(`/calls/${callId}/end`, data),
   history: (params) => api.get('/calls/history', { params }),
 };
@@ -62,10 +62,10 @@ export const relationshipsApi = {
 };
 
 export const userApi = {
-  me: () => api.get('/user/me'),
-  update: (data) => api.put('/user/me', data),
-  uploadPhoto: (formData) => api.post('/user/upload-photo', formData, {
+  me: () => api.get('/users/me'),
+  update: (data) => api.put('/users/me', data),
+  uploadPhoto: (formData) => api.post('/users/upload-photo', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
-  wealthLevels: () => api.get('/user/wealth-levels'),
+  wealthLevels: () => api.get('/users/wealth-levels'),
 };

@@ -33,6 +33,7 @@ const videoCallService = {
       callType,
       freeCallsRemaining: user.freeCallsRemaining,
       coinBalance: user.coinBalance,
+      costPerMinute: 10,
     };
   },
 
@@ -52,9 +53,45 @@ const videoCallService = {
 
     session.status = status;
     session.endedAt = new Date();
+
+    // Dynamically calculate cost for paid calls on end instead of upfront
+    if (session.callType === CALL_TYPES.PAID && status === CALL_STATUS.ACCEPTED) {
+      const user = await User.findById(userId);
+      if (user && session.startedAt) {
+        const costPerMinute = 10;
+        const durationMs = session.endedAt.getTime() - session.startedAt.getTime();
+        let durationMins = Math.ceil(durationMs / 60000);
+        if (durationMins < 1) durationMins = 1;
+
+        const totalCost = durationMins * costPerMinute;
+        const coinsToDeduct = Math.min(user.coinBalance, totalCost);
+
+        if (coinsToDeduct > 0) {
+          user.coinBalance -= coinsToDeduct;
+          user.totalCoinsEverSpent += coinsToDeduct;
+          await user.save();
+
+          await CoinTransaction.create({
+            userId: user._id,
+            type: COIN_TX_TYPES.CALL_DEDUCT,
+            amount: -coinsToDeduct,
+            balanceAfter: user.coinBalance,
+            referenceId: session._id.toString(),
+            note: `Video call for ${durationMins} min`,
+          });
+          session.coinsSpent = coinsToDeduct;
+        }
+        
+        await session.save();
+        return { ...session.toObject(), coinBalance: user.coinBalance };
+      }
+    }
+
     await session.save();
 
-    return session;
+    // Fetch user to return latest coinBalance just in case it was a free call or missed call but we want to sync
+    const user = await User.findById(userId).select('coinBalance');
+    return { ...session.toObject(), coinBalance: user ? user.coinBalance : 0 };
   },
 
   /**
@@ -103,34 +140,22 @@ const videoCallService = {
       user.freeCallsRemaining -= 1;
       await user.save();
     } else {
-      // Paid call — check coin balance
+      // Paid call — check coin balance but don't deduct yet
       const costPerMinute = 10; // from app_settings
       if (user.coinBalance < costPerMinute) {
         return { error: true, paywallType: 'coins_only', coinBalance: user.coinBalance };
       }
-      user.coinBalance -= costPerMinute;
-      user.totalCoinsEverSpent += costPerMinute;
-      await user.save();
-
-      // Record transaction
-      await CoinTransaction.create({
-        userId: user._id,
-        type: COIN_TX_TYPES.CALL_DEDUCT,
-        amount: -costPerMinute,
-        balanceAfter: user.coinBalance,
-        referenceId: session._id.toString(),
-        note: `Call with ${session.girlProfileId}`,
-      });
-
-      session.coinsSpent = costPerMinute;
+      
+      session.coinsSpent = 0; // will be calculated on endCall
     }
 
     if (!isDirectGirlId) {
       session.status = CALL_STATUS.ACCEPTED;
+      session.startedAt = new Date(); // Reset startedAt to actual call start
       await session.save();
     }
 
-    return { session, coinBalance: user.coinBalance };
+    return { session, coinBalance: user.coinBalance, costPerMinute: 10 };
   },
 
   /**

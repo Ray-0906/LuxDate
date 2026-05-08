@@ -63,8 +63,8 @@ const useAuthStore = create((set, get) => ({
   loadProfile: async () => {
     try {
       const res = await userApi.me();
-      get().setUser(res.data.data);
-    } catch { /* ignore */ }
+      get().setUser({ ...res.data.data }); // Force new obj ref
+    } catch (e) { console.warn('Load profile error:', e); }
   },
 
   logout: () => {

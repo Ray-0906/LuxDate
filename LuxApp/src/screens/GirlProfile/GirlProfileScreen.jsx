@@ -6,6 +6,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import theme from '../../theme/theme.js';
 import { profilesApi } from '../../api/services.js';
 import useProfileCallTrigger from '../../hooks/useProfileCallTrigger.js';
@@ -15,6 +16,7 @@ const { width: W } = Dimensions.get('window');
 
 export default function GirlProfileScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const girlParam = route.params?.girl;
   const [girl, setGirl] = useState(girlParam || null);
   const [currentPhoto, setCurrentPhoto] = useState(0);
@@ -25,7 +27,13 @@ export default function GirlProfileScreen({ route, navigation }) {
 
   // 10. A. Call Trigger Hook
   // Fires auto incoming call after 10-15 seconds
-  useProfileCallTrigger(girl?._id, !!girl);
+  useProfileCallTrigger(girl?._id, !!girl && isFocused);
+
+  useEffect(() => {
+    if (isFocused) {
+      TriggerEngine.setBlockedContext(false);
+    }
+  }, [isFocused]);
 
   useEffect(() => {
     if (girlParam?._id) {
@@ -47,9 +55,10 @@ export default function GirlProfileScreen({ route, navigation }) {
   const photos = girl.photos?.length ? girl.photos : ['https://via.placeholder.com/400'];
 
   const handleVideoCall = () => {
-    // Manually trigger the incoming call from this profile immediately
+    // Navigate to outoing calling ring screen
+    TriggerEngine.cancelScheduled();
     if (girl?._id) {
-      TriggerEngine.fireProfileTrigger(girl._id);
+      navigation.navigate('OutgoingCall', { girl });
     }
   };
 
