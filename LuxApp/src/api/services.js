@@ -30,6 +30,12 @@ export const chatApi = {
   clearCalls: () => api.delete('/chat/calls/clear'),
 };
 
+export const mediaApi = {
+  uploadImage: (formData) => api.post('/upload/image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+};
+
 export const coinsApi = {
   balance: () => api.get('/coins/balance'),
   transactions: (params) => api.get('/coins/transactions', { params }),

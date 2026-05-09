@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, Image, Pressable, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Keyboard,
+  View, Text, StyleSheet, FlatList, Image, Pressable, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Keyboard, Alert, PermissionsAndroid
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import theme from '../../theme/theme.js';
 import TriggerEngine from '../../engines/TriggerEngine.js';
-import { chatApi, userApi } from '../../api/services.js';
+import { chatApi, mediaApi } from '../../api/services.js';
 import socketService from '../../api/socket.js';
 import { EmojiKeyboard } from 'rn-emoji-keyboard';
 
@@ -20,6 +21,8 @@ export default function ConversationScreen({ route, navigation }) {
   const [isTyping, setIsTyping] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isEmojiOpen, setIsEmojiOpen] = useState(false);
+  const [isAttachmentOpen, setIsAttachmentOpen] = useState(false);
+  const [recentPhotos, setRecentPhotos] = useState([]);
   const flatListRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -85,14 +88,74 @@ export default function ConversationScreen({ route, navigation }) {
     }
   };
 
-  const handleImagePick = async () => {
+  const requestGalleryPermission = async () => {
+    if (Platform.OS === 'android') {
+      if (Platform.Version >= 33) {
+        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } else {
+        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      }
+    }
+    return true; // iOS is handled natively
+  };
+
+  const loadRecentPhotos = async () => {
+    const hasPermission = await requestGalleryPermission();
+    if (!hasPermission) return;
     try {
-      const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.7 });
-      if (result.didCancel || !result.assets?.length) return;
-      
-      const asset = result.assets[0];
+      const photos = await CameraRoll.getPhotos({ first: 20, assetType: 'Photos' });
+      setRecentPhotos(photos.edges);
+    } catch (e) {
+      console.warn('CameraRoll error: ', e);
+    }
+  };
+
+  const toggleAttachment = () => {
+    if (isAttachmentOpen) {
+      setIsAttachmentOpen(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    } else {
+      Keyboard.dismiss();
+      setIsEmojiOpen(false);
+      loadRecentPhotos();
+      setTimeout(() => setIsAttachmentOpen(true), 50);
+    }
+  };
+
+  const openCamera = async () => {
+    try {
+      const result = await launchCamera({ mediaType: 'photo', quality: 0.7, saveToPhotos: true });
+      if (!result.didCancel && result.assets?.length) {
+        setIsAttachmentOpen(false);
+        processAndSendImage(result.assets[0]);
+      }
+    } catch (e) {
+      console.warn('Camera error:', e.message);
+    }
+  };
+
+  const openFullGallery = async () => {
+    try {
+      const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.7, selectionLimit: 1 });
+      if (!result.didCancel && result.assets?.length) {
+        setIsAttachmentOpen(false);
+        processAndSendImage(result.assets[0]);
+      }
+    } catch (e) {
+      console.warn('Image picker error:', e.message);
+    }
+  };
+
+  const handleImagePick = () => {
+    // Old implementation using Alert removed. We now use toggleAttachment below.
+  };
+
+  const processAndSendImage = async (asset) => {
+    try {
       const formData = new FormData();
-      formData.append('photo', {
+      formData.append('image', {
         name: asset.fileName || 'photo.jpg',
         type: asset.type || 'image/jpeg',
         uri: Platform.OS === 'android' ? asset.uri : asset.uri.replace('file://', ''),
@@ -107,13 +170,14 @@ export default function ConversationScreen({ route, navigation }) {
         pending: true
       }, ...prev]);
 
-      const uploadRes = await userApi.uploadPhoto(formData);
+      const uploadRes = await mediaApi.uploadImage(formData);
       const mediaUrl = uploadRes.data.data.url;
 
       const msgRes = await chatApi.send(girl._id, { type: 'photo', mediaUrl });
       setMessages((prev) => prev.map(m => m._id === tempId ? msgRes.data.data : m));
     } catch (e) {
-      console.warn('Image picker error:', e.message);
+      console.warn('Image upload error:', e.message);
+      // Remove temp message if upload failed
     }
   };
 
@@ -195,7 +259,7 @@ export default function ConversationScreen({ route, navigation }) {
           </View>
         )}
 
-        <View style={[styles.inputBar, { paddingBottom: isEmojiOpen ? 12 : Math.max(insets.bottom, 12) }]}>
+        <View style={[styles.inputBar, { paddingBottom: (isEmojiOpen || isAttachmentOpen) ? 12 : Math.max(insets.bottom, 12) }]}>
           <View style={styles.inputRounded}>
             <Pressable style={styles.emojiBtn} onPress={() => { 
                 if (isEmojiOpen) {
@@ -203,6 +267,7 @@ export default function ConversationScreen({ route, navigation }) {
                   setTimeout(() => inputRef.current?.focus(), 100);
                 } else {
                   Keyboard.dismiss(); 
+                  setIsAttachmentOpen(false);
                   setTimeout(() => setIsEmojiOpen(true), 50);
                 }
               }}>
@@ -216,15 +281,15 @@ export default function ConversationScreen({ route, navigation }) {
               placeholderTextColor={theme.colors.textMuted}
               value={inputText}
               onChangeText={setInputText}
-              onFocus={() => setIsEmojiOpen(false)}
+              onFocus={() => { setIsEmojiOpen(false); setIsAttachmentOpen(false); }}
               multiline
               maxLength={250}
             />
             
             {!inputText ? (
               <View style={styles.inputAccessories}>
-                <Pressable style={styles.iconBtn} onPress={handleImagePick}>
-                  <Ionicons name="image-outline" size={22} color={theme.colors.textSecondary} />
+                <Pressable style={styles.iconBtn} onPress={toggleAttachment}>
+                  <Ionicons name={isAttachmentOpen ? "close-circle-outline" : "image-outline"} size={22} color={theme.colors.textSecondary} />
                 </Pressable>
               </View>
             ) : (
@@ -254,11 +319,47 @@ export default function ConversationScreen({ route, navigation }) {
         />
       </View>
     )}
+    {isAttachmentOpen && (
+      <View style={{ height: 320, backgroundColor: theme.colors.bgPrimary, paddingBottom: insets.bottom, paddingTop: 10 }}>
+        <View style={styles.attachmentHeader}>
+          <Pressable style={styles.attachmentCameraBtn} onPress={openCamera}>
+            <Ionicons name="camera" size={24} color="#FFF" />
+          </Pressable>
+          <Pressable style={styles.attachmentGalleryBtn} onPress={openFullGallery}>
+            <Text style={{color: '#FFF', fontWeight: '600'}}>All Media</Text>
+            <Ionicons name="chevron-forward" size={16} color="#FFF" />
+          </Pressable>
+        </View>
+        <FlatList
+          data={recentPhotos}
+          numColumns={3}
+          keyExtractor={(item) => item.node.image.uri}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 2 }}
+          renderItem={({ item }) => (
+            <Pressable 
+              style={{ flex: 1/3, aspectRatio: 1, padding: 2 }}
+              onPress={() => {
+                setIsAttachmentOpen(false);
+                processAndSendImage({ uri: item.node.image.uri, fileName: 'local.jpg', type: item.node.type });
+              }}
+            >
+              <Image source={{ uri: item.node.image.uri }} style={{ flex: 1, borderRadius: 4, backgroundColor: theme.colors.bgTertiary }} />
+            </Pressable>
+          )}
+          ListEmptyComponent={<Text style={{ color: theme.colors.textMuted, textAlign: 'center', marginTop: 40 }}>Loading recent photos...</Text>}
+        />
+      </View>
+    )}
+
   </View>
   );
 }
 
 const styles = StyleSheet.create({
+  attachmentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
+  attachmentCameraBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.bgSecondary, alignItems: 'center', justifyContent: 'center' },
+  attachmentGalleryBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.bgSecondary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, gap: 4 },
   safeContainer: { flex: 1, backgroundColor: theme.colors.bgPrimary },
   root: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.borderGlass },
