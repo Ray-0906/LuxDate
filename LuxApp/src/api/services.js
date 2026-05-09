@@ -25,7 +25,7 @@ export const callsApi = {
 export const chatApi = {
   inbox: (params) => api.get('/chat/inbox', { params }),
   messages: (girlId, params) => api.get(`/chat/${girlId}/messages`, { params }),
-  send: (girlId, message) => api.post(`/chat/${girlId}/send`, { message }),
+  send: (girlId, data) => api.post(`/chat/${girlId}/send`, data),
   clearAll: () => api.delete('/chat/clear-all'),
   clearCalls: () => api.delete('/chat/calls/clear'),
 };

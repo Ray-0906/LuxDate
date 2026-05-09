@@ -26,7 +26,7 @@ const chatSessionSchema = new mongoose.Schema(
 );
 
 chatSessionSchema.index({ userId: 1, girlProfileId: 1 }, { unique: true });
-chatSessionSchema.index({ userId: 1, lastGirlMessageAt: -1 });
+chatSessionSchema.index({ userId: 1, updatedAt: -1 });
 
 const ChatSession = mongoose.model('ChatSession', chatSessionSchema);
 export default ChatSession;

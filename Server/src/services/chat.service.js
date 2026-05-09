@@ -17,7 +17,7 @@ const chatService = {
       userId,
       status: CHAT_SESSION_STATUS.ACTIVE,
     })
-      .sort({ lastGirlMessageAt: -1 })
+      .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean();

@@ -22,6 +22,7 @@ import GirlProfileScreen from '../screens/GirlProfile/GirlProfileScreen.jsx';
 import IncomingCallScreen from '../screens/IncomingCall/IncomingCallScreen.jsx';
 import OutgoingCallScreen from '../screens/OutgoingCall/OutgoingCallScreen.jsx';
 import VideoCallScreen from '../screens/VideoCall/VideoCallScreen.jsx';
+import ConversationScreen from '../screens/Chat/ConversationScreen.jsx';
 
 export const navigationRef = createNavigationContainerRef();
 
@@ -90,7 +91,7 @@ function AppStack() {
         options={{ animation: 'slide_from_right' }}
       />
       {/* These screens will be built in later phases */}
-      {/* <Stack.Screen name="Conversation" component={ConversationScreen} /> */}
+      <Stack.Screen name="Conversation" component={ConversationScreen} options={{ animation: 'slide_from_right' }} />
       {/* <Stack.Screen name="CallHistory" component={CallHistoryScreen} /> */}
       <Stack.Screen
         name="IncomingCall"

@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Image, Pressable, ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import theme from '../../theme/theme.js';
@@ -23,7 +24,11 @@ export default function InboxScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => { fetchInbox(); }, [fetchInbox]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchInbox();
+    }, [fetchInbox])
+  );
 
   const renderItem = useCallback(({ item }) => {
     const girl = item.girl || item.girlProfile || {};
@@ -43,7 +48,7 @@ export default function InboxScreen({ navigation }) {
           <View style={styles.chatTopRow}>
             <Text style={styles.chatName} numberOfLines={1}>{girl.name || 'Unknown'}</Text>
             <Text style={styles.chatTime}>
-              {item.lastGirlMessageAt ? new Date(item.lastGirlMessageAt).toLocaleDateString() : ''}
+              {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : ''}
             </Text>
           </View>
           <Text style={styles.chatPreview} numberOfLines={1}>{lastMsg || 'Tap to chat'}</Text>
