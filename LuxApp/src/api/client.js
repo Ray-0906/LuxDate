@@ -1,5 +1,6 @@
 import axios from 'axios';
 import mmkvStorage from '../utils/storage.js';
+import socketService from './socket.js';
 
 const API_BASE = __DEV__
   ? 'http://10.0.2.2:5000/api'   // Android emulator → localhost
@@ -8,7 +9,12 @@ const API_BASE = __DEV__
 const api = axios.create({
   baseURL: API_BASE,
   timeout: 15000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  },
 });
 
 // Attach token
@@ -39,12 +45,16 @@ api.interceptors.response.use(
           });
           const newTokens = res.data.data.tokens;
           mmkvStorage.setItem('user_tokens', JSON.stringify(newTokens));
+          if (!socketService.getSocket()?.connected) {
+            socketService.connect();
+          }
           original.headers.Authorization = `Bearer ${newTokens.accessToken}`;
           return api(original);
         }
       } catch {
         mmkvStorage.removeItem('user_tokens');
         mmkvStorage.removeItem('user_profile');
+        socketService.disconnect();
       }
     }
     return Promise.reject(error);

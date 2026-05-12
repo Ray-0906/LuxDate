@@ -24,6 +24,7 @@ const chatMessageSchema = new mongoose.Schema(
       },
     },
     isRead: { type: Boolean, default: false },
+    clientDeliveryId: { type: String, default: null },
     sentAt: { type: Date, default: Date.now },
   },
   {
@@ -39,6 +40,7 @@ const chatMessageSchema = new mongoose.Schema(
 
 chatMessageSchema.index({ userId: 1, girlProfileId: 1, sentAt: -1 });
 chatMessageSchema.index({ userId: 1, sentAt: -1 });
+chatMessageSchema.index({ userId: 1, clientDeliveryId: 1 }, { unique: true, sparse: true });
 
 const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);
 export default ChatMessage;

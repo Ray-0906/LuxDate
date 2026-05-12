@@ -27,6 +27,15 @@ export default function InboxScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       fetchInbox();
+      
+      // Auto refresh exactly when a new socket ping is blasted over
+      const { default: socketService } = require('../../api/socket.js');
+      const handleSocketPing = () => fetchInbox();
+      socketService.onNewMessage(handleSocketPing);
+
+      return () => {
+        socketService.offNewMessage(handleSocketPing);
+      };
     }, [fetchInbox])
   );
 

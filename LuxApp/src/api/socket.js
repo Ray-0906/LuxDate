@@ -83,13 +83,21 @@ const socketService = {
 
   emitTyping(conversationId) {
     if (socket?.connected) {
-      socket.emit('typing', { conversationId });
+      socket.emit('chat:typing', { girlId: conversationId, isTyping: true });
     }
   },
 
   onTyping(callback) {
     if (socket) {
       socket.on('typing', callback);
+      socket.on('chat:typing', callback);
+    }
+  },
+
+  offTyping(callback) {
+    if (socket) {
+      socket.off('typing', callback);
+      socket.off('chat:typing', callback);
     }
   },
 };

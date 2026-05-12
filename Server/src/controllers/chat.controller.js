@@ -23,10 +23,32 @@ const chatController = {
     } catch (e) { next(e); }
   },
 
+  async deliverPrefetchMessage(req, res, next) {
+    try {
+      const msg = await chatService.deliverPrefetchedMessage(req.user._id, req.body);
+      return ApiResponse.success(res, { data: msg, message: 'Prefetched message delivered', statusCode: 201 });
+    } catch (e) { next(e); }
+  },
+
   async clearAll(req, res, next) {
     try {
       await chatService.clearAll(req.user._id);
       return ApiResponse.success(res, { message: 'All chats cleared' });
+    } catch (e) { next(e); }
+  },
+
+  async triggerAutoMessage(req, res, next) {
+    try {
+      const msg = await chatService.triggerAutoMessage(req.user._id);
+      return ApiResponse.success(res, { data: msg, message: 'Triggered' });
+    } catch (e) { next(e); }
+  },
+
+  async prefetchAutoMessages(req, res, next) {
+    try {
+      const count = parseInt(req.query.count) || 3;
+      const msgs = await chatService.prefetchAutoMessages(req.user._id, count);
+      return ApiResponse.success(res, { data: msgs, message: 'Prefetched' });
     } catch (e) { next(e); }
   },
 };

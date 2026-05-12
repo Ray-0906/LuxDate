@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, Image, Pressable, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Keyboard, Alert, PermissionsAndroid
+  View, Text, StyleSheet, FlatList, Image, Pressable, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Keyboard, PermissionsAndroid
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
@@ -10,6 +11,7 @@ import theme from '../../theme/theme.js';
 import TriggerEngine from '../../engines/TriggerEngine.js';
 import { chatApi, mediaApi } from '../../api/services.js';
 import socketService from '../../api/socket.js';
+import useChatUIStore from '../../store/chatUIStore.js';
 import { EmojiKeyboard } from 'rn-emoji-keyboard';
 
 export default function ConversationScreen({ route, navigation }) {
@@ -25,6 +27,7 @@ export default function ConversationScreen({ route, navigation }) {
   const [recentPhotos, setRecentPhotos] = useState([]);
   const flatListRef = useRef(null);
   const inputRef = useRef(null);
+  const setActiveConversationGirlId = useChatUIStore((s) => s.setActiveConversationGirlId);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -38,28 +41,43 @@ export default function ConversationScreen({ route, navigation }) {
     }
   }, [girl._id]);
 
+  useFocusEffect(
+    useCallback(() => {
+      setActiveConversationGirlId(girl?._id);
+
+      return () => {
+        setActiveConversationGirlId(null);
+      };
+    }, [girl?._id, setActiveConversationGirlId])
+  );
+
   useEffect(() => {
     TriggerEngine.cancelScheduled();
     fetchMessages();
 
     const socket = socketService.getSocket();
-    if (socket) {
-      socketService.joinConversation(girl._id);
+    if (!socket) return undefined;
 
-      socketService.onNewMessage((msg) => {
-        if (msg.girlProfileId === girl._id) {
-          setMessages((prev) => [msg, ...prev]);
-        }
-      });
-      socketService.onTyping((data) => {
-        if (data.girlProfileId === girl._id) {
-          setIsTyping(true);
-          setTimeout(() => setIsTyping(false), 3000);
-        }
-      });
-    }
+    const handleNewMessage = (msg) => {
+      if (String(msg?.girlProfileId) === String(girl._id)) {
+        setMessages((prev) => [msg, ...prev]);
+      }
+    };
+
+    const handleTyping = (data) => {
+      if (String(data?.girlId || data?.girlProfileId) === String(girl._id)) {
+        setIsTyping(true);
+        setTimeout(() => setIsTyping(false), 3000);
+      }
+    };
+
+    socketService.joinConversation(girl._id);
+    socketService.onNewMessage(handleNewMessage);
+    socketService.onTyping(handleTyping);
 
     return () => {
+      socketService.offNewMessage(handleNewMessage);
+      socketService.offTyping(handleTyping);
       socketService.leaveConversation(girl._id);
     };
   }, [fetchMessages, girl._id]);
@@ -146,10 +164,6 @@ export default function ConversationScreen({ route, navigation }) {
     } catch (e) {
       console.warn('Image picker error:', e.message);
     }
-  };
-
-  const handleImagePick = () => {
-    // Old implementation using Alert removed. We now use toggleAttachment below.
   };
 
   const processAndSendImage = async (asset) => {

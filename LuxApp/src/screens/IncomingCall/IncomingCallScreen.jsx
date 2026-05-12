@@ -45,6 +45,7 @@ export default function IncomingCallScreen({ route, navigation }) {
       Vibration.cancel();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const pulseStyle = useAnimatedStyle(() => ({

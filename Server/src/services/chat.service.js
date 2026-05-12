@@ -2,7 +2,9 @@ import ChatSession from '../models/Conversation.js';
 import ChatMessage from '../models/Message.js';
 import GirlProfile from '../models/Girl.js';
 import AutoReplyEngine from '../engines/AutoReplyEngine.js';
+import AutoReplyPool from '../models/AutoReplyPool.js';
 import { SENDER_TYPES, MESSAGE_TYPES, CHAT_SESSION_STATUS, CALL_STATUS } from '../utils/constants.js';
+import { getIO } from '../config/socket.js';
 
 const chatService = {
   /**
@@ -114,6 +116,46 @@ const chatService = {
     return userMsg;
   },
 
+  async deliverPrefetchedMessage(userId, { girlId, text, notificationId = null }) {
+    if (notificationId) {
+      const existingMessage = await ChatMessage.findOne({
+        userId,
+        clientDeliveryId: notificationId,
+      }).lean();
+
+      if (existingMessage) {
+        return existingMessage;
+      }
+    }
+
+    const sentAt = new Date();
+    const deliveredMessage = await ChatMessage.create({
+      userId,
+      girlProfileId: girlId,
+      senderType: SENDER_TYPES.AUTO,
+      clientDeliveryId: notificationId,
+      content: {
+        type: MESSAGE_TYPES.TEXT,
+        text: text || 'Hello!',
+      },
+      sentAt,
+    });
+
+    await ChatSession.findOneAndUpdate(
+      { userId, girlProfileId: girlId },
+      {
+        $set: {
+          status: CHAT_SESSION_STATUS.ACTIVE,
+          isWaitingForUser: true,
+          lastGirlMessageAt: sentAt,
+        },
+      },
+      { upsert: true }
+    );
+
+    return deliveredMessage;
+  },
+
   /**
    * Insert a call log message into chat
    */
@@ -140,6 +182,106 @@ const chatService = {
     await ChatSession.updateMany({ userId }, { status: CHAT_SESSION_STATUS.CLOSED });
     return { cleared: true };
   },
+
+  /**
+   * GET /messages/trigger — Triggers a single fake incoming message.
+   */
+  async triggerAutoMessage(userId) {
+    // Pick a random girl to send message from
+    const girlsCount = await GirlProfile.countDocuments({ isActive: true });
+    if (!girlsCount) return null;
+
+    const randomSkip = Math.floor(Math.random() * girlsCount);
+    const girl = await GirlProfile.findOne({ isActive: true }).skip(randomSkip);
+    
+    if (!girl) return null;
+
+    const lang = girl.language === 'Hindi' ? 'hi' : girl.language === 'Bengali' ? 'bn' : 'en';
+    const pool = await AutoReplyPool.aggregate([
+      { $match: { language: lang, category: 'greeting' } }, // Prefer greetings for triggers
+      { $sample: { size: 1 } },
+    ]);
+
+    let replyText = 'Hi!';
+    if (pool.length && pool[0].messages?.length) {
+      const messages = pool[0].messages;
+      replyText = messages[Math.floor(Math.random() * messages.length)];
+    }
+
+    const payload = {
+      userId,
+      girlProfileId: girl._id,
+      senderType: SENDER_TYPES.AUTO,
+      content: { type: MESSAGE_TYPES.TEXT, text: replyText },
+      sentAt: new Date(),
+    };
+
+    const reply = await ChatMessage.create(payload);
+    const emittedReply = {
+      ...reply.toObject(),
+      source: 'trigger',
+      girl: {
+        _id: girl._id,
+        name: girl.name,
+        avatar: girl.photos?.[0] || null,
+      },
+    };
+
+    await ChatSession.findOneAndUpdate(
+      { userId, girlProfileId: girl._id },
+      { 
+        $set: { lastGirlMessageAt: new Date(), isWaitingForUser: true }, 
+        $setOnInsert: { status: CHAT_SESSION_STATUS.ACTIVE }
+      },
+      { upsert: true, new: true }
+    );
+
+    try {
+      getIO().to(`user:${userId}`).emit('new_message', emittedReply);
+    } catch (err) {
+      console.error('Socket emission failed', err.message);
+    }
+
+    return {
+      message: emittedReply,
+      girl: emittedReply.girl,
+    };
+  },
+
+  /**
+   * GET /messages/prefetch — Generates an array of future fake messages for offline local pushes.
+   */
+  async prefetchAutoMessages(userId, count = 3) {
+    const girls = await GirlProfile.aggregate([
+      { $match: { isActive: true } },
+      { $sample: { size: count } }
+    ]);
+
+    const prefetchedMessages = [];
+
+    for (const girl of girls) {
+      const lang = girl.language === 'Hindi' ? 'hi' : girl.language === 'Bengali' ? 'bn' : 'en';
+      const pool = await AutoReplyPool.aggregate([
+        { $match: { language: lang } },
+        { $sample: { size: 1 } },
+      ]);
+  
+      let replyText = 'Hello!';
+      if (pool.length && pool[0].messages?.length) {
+        const messages = pool[0].messages;
+        replyText = messages[Math.floor(Math.random() * messages.length)];
+      }
+
+      prefetchedMessages.push({
+        girlId: girl._id,
+        girlName: girl.name,
+        girlAvatar: girl.photos?.[0] || null,
+        text: replyText
+      });
+    }
+
+    return prefetchedMessages;
+  }
 };
 
 export default chatService;

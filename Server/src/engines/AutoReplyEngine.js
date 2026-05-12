@@ -3,6 +3,7 @@ import ChatSession from '../models/Conversation.js';
 import GirlProfile from '../models/Girl.js';
 import AutoReplyPool from '../models/AutoReplyPool.js';
 import { SENDER_TYPES, MESSAGE_TYPES, CHAT_SESSION_STATUS } from '../utils/constants.js';
+import { getIO } from '../config/socket.js';
 
 /**
  * AutoReplyEngine — picks a reply from the pool and sends it after a delay.
@@ -25,7 +26,7 @@ const AutoReplyEngine = {
     }
 
     // Get girl's language for matching
-    const girl = await GirlProfile.findById(girlProfileId).select('language').lean();
+    const girl = await GirlProfile.findById(girlProfileId).select('language name photos').lean();
     const lang = girl?.language === 'Hindi' ? 'hi' : girl?.language === 'Bengali' ? 'bn' : 'en';
 
     // Pick a random reply from pool
@@ -57,6 +58,20 @@ const AutoReplyEngine = {
           session.isWaitingForUser = true;
           session.lastGirlMessageAt = new Date();
           await session.save();
+
+          try {
+            getIO().to(`user:${userId}`).emit('new_message', {
+              ...reply.toObject(),
+              source: 'auto_reply',
+              girl: {
+                _id: girlProfileId,
+                name: girl?.name,
+                avatar: girl?.photos?.[0] || null,
+              },
+            });
+          } catch (socketError) {
+            console.error('AutoReplyEngine socket emission failed:', socketError.message);
+          }
 
           resolve(reply);
         } catch (e) {

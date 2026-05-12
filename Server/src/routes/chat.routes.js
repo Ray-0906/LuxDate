@@ -6,6 +6,9 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/inbox', chatController.getInbox);
+router.get('/trigger', chatController.triggerAutoMessage);
+router.get('/prefetch', chatController.prefetchAutoMessages);
+router.post('/deliver-prefetch', chatController.deliverPrefetchMessage);
 router.get('/:girlId/messages', chatController.getMessages);
 router.post('/:girlId/send', chatController.sendMessage);
 router.delete('/clear-all', chatController.clearAll);

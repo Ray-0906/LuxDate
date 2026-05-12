@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import mmkvStorage from '../utils/storage.js';
 import { authApi, userApi } from '../api/services.js';
+import socketService from '../api/socket.js';
 
 const useAuthStore = create((set, get) => ({
   user: JSON.parse(mmkvStorage.getItem('user_profile') || 'null'),
@@ -13,6 +14,7 @@ const useAuthStore = create((set, get) => ({
   setTokens: (tokens) => {
     mmkvStorage.setItem('user_tokens', JSON.stringify(tokens));
     set({ tokens, isAuthenticated: true });
+    socketService.connect();
   },
 
   setUser: (user) => {
@@ -70,6 +72,7 @@ const useAuthStore = create((set, get) => ({
   logout: () => {
     mmkvStorage.removeItem('user_tokens');
     mmkvStorage.removeItem('user_profile');
+    socketService.disconnect();
     set({ user: null, tokens: null, isAuthenticated: false, isOnboarded: false });
   },
 }));

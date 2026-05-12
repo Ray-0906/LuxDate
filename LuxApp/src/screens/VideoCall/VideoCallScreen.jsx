@@ -70,6 +70,7 @@ export default function VideoCallScreen({ route, navigation }) {
     if (!hasPermission) {
       requestPermission();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasPermission]);
 
   useEffect(() => {
@@ -98,6 +99,7 @@ export default function VideoCallScreen({ route, navigation }) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callType, coinBalance, costPerMinute, isVideoReady]);
 
   const formatTime = useCallback((secs) => {
