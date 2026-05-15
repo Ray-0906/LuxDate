@@ -6,6 +6,7 @@ import AppNavigator from './src/navigation/AppNavigator.jsx';
 import MessageTriggerEngine from './src/engines/MessageTriggerEngine';
 import socketService from './src/api/socket.js';
 import useAuthStore from './src/store/authStore.js';
+import useChatBadgeStore from './src/store/chatBadgeStore.js';
 
 const App = () => {
   const appState = useRef(AppState.currentState);
@@ -15,17 +16,26 @@ const App = () => {
     if (!isAuthenticated) {
       MessageTriggerEngine.stop();
       socketService.disconnect();
+      useChatBadgeStore.getState().reset();
       return undefined;
     }
 
     appState.current = AppState.currentState;
     socketService.connect();
     MessageTriggerEngine.start();
+    useChatBadgeStore.getState().refreshUnreadCount();
+
+    const handleUnreadRefresh = () => {
+      useChatBadgeStore.getState().refreshUnreadCount();
+    };
+
+    socketService.onNewMessage(handleUnreadRefresh);
 
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         // App has come to the foreground!
         MessageTriggerEngine.resumeForeground();
+        handleUnreadRefresh();
       } else if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
         // App has gone to the background!
         MessageTriggerEngine.pauseForeground();
@@ -34,6 +44,7 @@ const App = () => {
     });
 
     return () => {
+      socketService.offNewMessage(handleUnreadRefresh);
       subscription.remove();
       MessageTriggerEngine.stop();
     };

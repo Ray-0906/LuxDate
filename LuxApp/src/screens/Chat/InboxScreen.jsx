@@ -7,22 +7,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import theme from '../../theme/theme.js';
 import { chatApi } from '../../api/services.js';
+import useChatBadgeStore from '../../store/chatBadgeStore.js';
 
 export default function InboxScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const setUnreadCount = useChatBadgeStore((s) => s.setUnreadCount);
 
   const fetchInbox = useCallback(async () => {
     try {
       const res = await chatApi.inbox();
-      setConversations(res.data.data || []);
+      const items = res.data.data || [];
+      const unreadCount = items.reduce((sum, item) => sum + (item.unreadCount || 0), 0);
+      setConversations(items);
+      setUnreadCount(unreadCount);
     } catch (e) {
       console.warn('Inbox error:', e.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setUnreadCount]);
 
   useFocusEffect(
     useCallback(() => {

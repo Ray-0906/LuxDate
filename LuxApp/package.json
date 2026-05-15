@@ -23,6 +23,7 @@
     "react-native-gesture-handler": "^2.31.1",
     "react-native-image-picker": "^8.2.1",
     "react-native-linear-gradient": "^2.8.3",
+    "lottie-react-native": "^7.3.4",
     "react-native-mmkv": "^4.3.1",
     "react-native-nitro-image": "^0.14.0",
     "react-native-nitro-modules": "^0.35.6",

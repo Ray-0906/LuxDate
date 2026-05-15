@@ -129,8 +129,12 @@ class MessageTriggerEngine {
   async handleNewMessage(msgPayload) {
     if (!this.isForeground) return; // Background fetch handles offline completely
 
-    const activeGirlId = useChatUIStore.getState().activeConversationGirlId;
-    if (activeGirlId && String(activeGirlId) === String(msgPayload?.girlProfileId)) {
+    const { activeConversationGirlId, activeCallGirlId } = useChatUIStore.getState();
+    const incomingGirlId = String(msgPayload?.girlProfileId || '');
+    if (
+      (activeConversationGirlId && String(activeConversationGirlId) === incomingGirlId)
+      || (activeCallGirlId && String(activeCallGirlId) === incomingGirlId)
+    ) {
       return;
     }
 

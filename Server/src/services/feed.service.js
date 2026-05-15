@@ -1,4 +1,5 @@
 import GirlProfile from '../models/Girl.js';
+import Gift from '../models/Gift.js';
 import { DEFAULTS } from '../utils/constants.js';
 
 /**
@@ -62,6 +63,40 @@ const feedService = {
       .lean();
 
     if (!girl) return null;
+    if (!girl.gifts?.length) return girl;
+
+    const giftIdsNeedingHydration = girl.gifts
+      .filter((gift) => gift?.giftId && (!gift.giftName || (!gift.giftIconUrl && !gift.emojiFallback)))
+      .map((gift) => gift.giftId);
+
+    let hydratedById = new Map();
+    if (giftIdsNeedingHydration.length) {
+      const docs = await Gift.find({ _id: { $in: giftIdsNeedingHydration } })
+        .select('name iconUrl emojiFallback level sortOrder')
+        .lean();
+      hydratedById = new Map(docs.map((doc) => [String(doc._id), doc]));
+    }
+
+    girl.gifts = girl.gifts
+      .map((gift) => {
+        const hydrated = hydratedById.get(String(gift.giftId)) || {};
+        return {
+          giftId: gift.giftId,
+          giftName: gift.giftName || hydrated.name || '',
+          giftIconUrl: gift.giftIconUrl || hydrated.iconUrl || '',
+          emojiFallback: gift.emojiFallback || hydrated.emojiFallback || '',
+          count: gift.count || 0,
+          level: hydrated.level || 0,
+          sortOrder: hydrated.sortOrder || 0,
+        };
+      })
+      .sort((a, b) => (
+        (b.count - a.count)
+        || (a.level - b.level)
+        || (a.sortOrder - b.sortOrder)
+        || a.giftName.localeCompare(b.giftName)
+      ));
+
     return girl;
   },
 

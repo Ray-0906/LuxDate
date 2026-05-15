@@ -26,6 +26,9 @@ const girlProfileSchema = new mongoose.Schema(
     gifts: [
       {
         giftId: { type: mongoose.Schema.Types.ObjectId, ref: 'Gift' },
+        giftName: { type: String, default: '' },
+        giftIconUrl: { type: String, default: '' },
+        emojiFallback: { type: String, default: '' },
         count: { type: Number, default: 0 },
       },
     ],

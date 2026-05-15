@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import mmkvStorage from '../utils/storage.js';
 import { authApi, userApi } from '../api/services.js';
 import socketService from '../api/socket.js';
+import useChatBadgeStore from './chatBadgeStore.js';
+import useGiftStore from './giftStore.js';
 
 const useAuthStore = create((set, get) => ({
   user: JSON.parse(mmkvStorage.getItem('user_profile') || 'null'),
@@ -15,6 +17,7 @@ const useAuthStore = create((set, get) => ({
     mmkvStorage.setItem('user_tokens', JSON.stringify(tokens));
     set({ tokens, isAuthenticated: true });
     socketService.connect();
+    useChatBadgeStore.getState().refreshUnreadCount();
   },
 
   setUser: (user) => {
@@ -73,6 +76,8 @@ const useAuthStore = create((set, get) => ({
     mmkvStorage.removeItem('user_tokens');
     mmkvStorage.removeItem('user_profile');
     socketService.disconnect();
+    useChatBadgeStore.getState().reset();
+    useGiftStore.getState().reset();
     set({ user: null, tokens: null, isAuthenticated: false, isOnboarded: false });
   },
 }));

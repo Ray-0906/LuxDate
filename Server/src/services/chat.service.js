@@ -6,6 +6,17 @@ import AutoReplyPool from '../models/AutoReplyPool.js';
 import { SENDER_TYPES, MESSAGE_TYPES, CHAT_SESSION_STATUS, CALL_STATUS } from '../utils/constants.js';
 import { getIO } from '../config/socket.js';
 
+const formatLastMessagePreview = (message) => {
+  const type = message?.content?.type || MESSAGE_TYPES.TEXT;
+  if (type === MESSAGE_TYPES.GIFT) {
+    const giftName = message?.content?.giftName || 'gift';
+    const quantity = message?.content?.quantity || 1;
+    return quantity > 1 ? `Sent ${quantity}x ${giftName}` : `Sent ${giftName}`;
+  }
+  if (type === MESSAGE_TYPES.PHOTO) return 'Photo';
+  return message?.content?.text || '';
+};
+
 const chatService = {
   /**
    * GET /chat/inbox — list all conversations with last message
@@ -45,7 +56,7 @@ const chatService = {
         return {
           ...s,
           girl,
-          lastMessage: lastMsg?.content?.text || '',
+          lastMessage: formatLastMessagePreview(lastMsg),
           lastMessageType: lastMsg?.content?.type || 'text',
           unreadCount,
         };

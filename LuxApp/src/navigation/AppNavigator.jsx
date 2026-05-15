@@ -6,6 +6,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import theme from '../theme/theme.js';
 import useAuthStore from '../store/authStore.js';
 import TriggerEngine from '../engines/TriggerEngine.js';
+import useChatBadgeStore from '../store/chatBadgeStore.js';
 
 // Auth Screens
 import LoginScreen from '../screens/auth/LoginScreen.jsx';
@@ -42,6 +43,9 @@ const TAB_ICONS = {
 };
 
 function MainTabs() {
+  const unreadCount = useChatBadgeStore((s) => s.unreadCount);
+  const unreadBadgeLabel = unreadCount > 99 ? '99+' : unreadCount;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -65,7 +69,24 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="ForYou" component={ForYouScreen} options={{ tabBarLabel: 'For You' }} />
-      <Tab.Screen name="Chat" component={InboxScreen} />
+      <Tab.Screen
+        name="Chat"
+        component={InboxScreen}
+        options={{
+          tabBarBadge: unreadCount > 0 ? unreadBadgeLabel : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: theme.colors.accentMagenta,
+            color: theme.colors.textPrimary,
+            fontSize: 10,
+            fontWeight: '800',
+            minWidth: unreadCount > 99 ? 24 : 18,
+            height: 18,
+            borderRadius: 9,
+            borderWidth: 1.5,
+            borderColor: theme.colors.bgSecondary,
+          },
+        }}
+      />
       <Tab.Screen name="Me" component={ProfileScreen} />
     </Tab.Navigator>
   );

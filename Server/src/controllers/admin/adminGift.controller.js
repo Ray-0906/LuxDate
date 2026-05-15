@@ -11,12 +11,15 @@ const adminGiftController = {
   },
   async create(req, res, next) {
     try {
-      let imageUrl = req.body.image || '';
+      let iconUrl = req.body.iconUrl || req.body.image || '';
       if (req.file?.buffer) {
         const r = await uploadService.uploadGiftImage(req.file.buffer);
-        imageUrl = r.url;
+        iconUrl = r.url;
       }
-      const gift = await girlService.createGift({ ...req.body, image: imageUrl });
+      const gift = await girlService.createGift({
+        ...req.body,
+        iconUrl,
+      });
       return ApiResponse.created(res, { data: { gift }, message: 'Gift created' });
     } catch (e) { next(e); }
   },

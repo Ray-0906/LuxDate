@@ -25,7 +25,7 @@ const girlService = {
       charmLevel: charmLevel || 'Rising',
       photos: [photoUrl],
       firstMessages: firstMessages || [],
-      createdBy: adminId,
+      createdByAdminId: adminId,
     });
 
     return girl;
@@ -183,17 +183,31 @@ const girlService = {
   // ─── Admin Gift Management (delegated) ──────────────
   async listAllGifts() {
     const Gift = (await import('../models/Gift.js')).default;
-    return Gift.find({}).sort({ level: 1, coinCost: 1 }).lean();
+    return Gift.find({}).sort({ coinCost: 1, sortOrder: 1, createdAt: 1, name: 1 }).lean();
   },
 
   async createGift(data) {
     const Gift = (await import('../models/Gift.js')).default;
-    return Gift.create(data);
+    return Gift.create({
+      name: data.name,
+      coinCost: Number(data.coinCost),
+      level: Number(data.level ?? 1),
+      sortOrder: Number(data.sortOrder ?? 0),
+      iconUrl: data.iconUrl || '',
+      animationUrl: data.animationUrl || '',
+      emojiFallback: data.emojiFallback || '',
+      isActive: data.isActive !== false && data.isActive !== 'false',
+    });
   },
 
   async updateGift(giftId, updates) {
     const Gift = (await import('../models/Gift.js')).default;
-    const gift = await Gift.findByIdAndUpdate(giftId, updates, { new: true });
+    const normalized = { ...updates };
+    if (normalized.coinCost !== undefined) normalized.coinCost = Number(normalized.coinCost);
+    if (normalized.level !== undefined) normalized.level = Number(normalized.level);
+    if (normalized.sortOrder !== undefined) normalized.sortOrder = Number(normalized.sortOrder);
+    if (normalized.isActive !== undefined) normalized.isActive = normalized.isActive !== false && normalized.isActive !== 'false';
+    const gift = await Gift.findByIdAndUpdate(giftId, normalized, { new: true, runValidators: true });
     if (!gift) throw new NotFoundError('Gift not found');
     return gift;
   },

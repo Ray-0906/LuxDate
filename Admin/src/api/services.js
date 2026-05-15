@@ -38,7 +38,7 @@ export const chatApi = {
 
 export const giftsApi = {
   list: () => api.get('/admin/gifts'),
-  create: (formData) => api.post('/admin/gifts', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  create: (data) => api.post('/admin/gifts', data),
   update: (id, data) => api.put(`/admin/gifts/${id}`, data),
   delete: (id) => api.delete(`/admin/gifts/${id}`),
   getStats: (params) => api.get('/admin/gifts/stats', { params }),

@@ -12,11 +12,22 @@ const giftController = {
   async sendGift(req, res, next) {
     try {
       const result = await giftService.sendGift(req.user._id, req.body);
-      if (result.error) {
-        return ApiResponse.error(res, {
+      if (result?.error && result.code === 'invalid_quantity') {
+        return res.status(result.statusCode).json({
+          success: false,
+          message: result.message,
+          data: { code: result.code },
+        });
+      }
+      if (result?.error) {
+        return res.status(402).json({
+          success: false,
           message: 'Insufficient coins',
-          statusCode: 402,
-          data: { paywallType: result.paywallType, coinBalance: result.coinBalance },
+          data: {
+            paywallType: result.paywallType,
+            coinBalance: result.coinBalance,
+            code: result.code,
+          },
         });
       }
       return ApiResponse.success(res, { data: result, message: 'Gift sent!' });

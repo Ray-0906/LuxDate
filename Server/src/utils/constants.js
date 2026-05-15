@@ -25,6 +25,7 @@ export const MESSAGE_TYPES = {
   TEXT: 'text',
   PHOTO: 'photo',
   CALL_LOG: 'call_log',
+  GIFT: 'gift',
 };
 
 // Who sent the message
@@ -92,6 +93,7 @@ export const REPLY_CATEGORIES = {
   FLIRTY: 'flirty',
   CURIOUS: 'curious',
   GENERIC: 'generic',
+  GIFT_REACTION: 'gift_reaction',
 };
 
 // Chat session status

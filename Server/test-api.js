@@ -212,7 +212,16 @@ async function run() {
   // ─── 11. Gifts ───
   console.log('\n── Gifts ──');
   if (adminToken) {
-    const cg = await req('POST', '/admin/gifts', { name: 'Rose', coinCost: 100, category: 'regular', isActive: true }, adminToken);
+    const cg = await req('POST', '/admin/gifts', {
+      name: 'Rose',
+      coinCost: 100,
+      level: 1,
+      sortOrder: 1,
+      emojiFallback: '🌹',
+      iconUrl: 'https://example.com/rose.png',
+      animationUrl: '',
+      isActive: true,
+    }, adminToken);
     if (check('Create Gift', cg.status, 201, cg.data)) {
       giftId = cg.data.data?.gift?._id || '';
     }
@@ -222,7 +231,7 @@ async function run() {
   check('Gift Catalog', cat.status, 200, cat.data);
 
   if (giftId && girlId) {
-    const sg = await req('POST', '/gifts/send', { girlId, giftId, context: 'chat' }, userToken);
+    const sg = await req('POST', '/gifts/send', { girlId, giftId, quantity: 1 }, userToken);
     check('Send Gift', sg.status, 200, sg.data);
   }
 
