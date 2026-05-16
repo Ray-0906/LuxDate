@@ -22,6 +22,7 @@ import TriggerEngine from '../../engines/TriggerEngine.js';
 import GiftPickerModal from '../../components/GiftPickerModal.jsx';
 import GiftBurstOverlay from '../../components/GiftBurstOverlay.jsx';
 import InsufficientCoinsModal from '../../components/InsufficientCoinsModal.jsx';
+import CoinPackSheet from '../../components/CoinPackSheet.jsx';
 
 const { width: W } = Dimensions.get('window');
 
@@ -37,6 +38,7 @@ export default function GirlProfileScreen({ route, navigation }) {
   const [relationships, setRelationships] = useState({});
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [showCoinsModal, setShowCoinsModal] = useState(false);
+  const [showCoinPackSheet, setShowCoinPackSheet] = useState(false);
   const [coinsModalBalance, setCoinsModalBalance] = useState(0);
   const [coinsModalRequired, setCoinsModalRequired] = useState(0);
   const [giftBurst, setGiftBurst] = useState(null);
@@ -303,10 +305,21 @@ export default function GirlProfileScreen({ route, navigation }) {
         coinBalance={coinsModalBalance}
         requiredCoins={coinsModalRequired}
         onClose={() => setShowCoinsModal(false)}
+        onBuyCoins={() => {
+          setShowCoinsModal(false);
+          setShowCoinPackSheet(true);
+        }}
         onGoWallet={() => {
           setShowCoinsModal(false);
-          navigation.navigate('MainTabs', { screen: 'Me' });
+          navigation.navigate('Wallet');
         }}
+      />
+
+      <CoinPackSheet
+        visible={showCoinPackSheet}
+        onClose={() => setShowCoinPackSheet(false)}
+        context="gift"
+        requiredCoins={coinsModalRequired}
       />
 
       <Modal visible={!!activeRel} transparent animationType="fade">

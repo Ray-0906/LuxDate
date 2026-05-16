@@ -6,6 +6,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/plans', vipController.getPlans);
+router.get('/status', vipController.getStatus);
 router.post('/purchase', vipController.purchase);
 
 export default router;

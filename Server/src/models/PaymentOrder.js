@@ -29,6 +29,10 @@ const paymentTransactionSchema = new mongoose.Schema(
     },
     webhookVerified: { type: Boolean, default: false },
     idempotencyKey: { type: String, default: '' },
+    /** One-time mock checkout secret (gateway mock only); cleared after successful verify */
+    mockCompletionNonce: { type: String, default: null },
+    /** Mock nonce TTL; verify fails after this instant */
+    mockNonceExpiresAt: { type: Date, default: null },
   },
   {
     timestamps: true,

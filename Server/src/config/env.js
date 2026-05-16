@@ -7,12 +7,28 @@ const __dirname = dirname(__filename);
 
 dotenv.config({ path: resolve(__dirname, '../../.env') });
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+const isProd = nodeEnv === 'production';
+const razorpayKeyIdTrimmed = (process.env.RAZORPAY_KEY_ID || '').trim();
+const paymentMockEnv = process.env.PAYMENT_MOCK;
+const explicitPaymentMock = paymentMockEnv === 'true';
+const explicitPaymentMockOff = paymentMockEnv === 'false';
+const devAutoPaymentMock =
+  !explicitPaymentMockOff && nodeEnv === 'development' && !razorpayKeyIdTrimmed;
+const paymentMockAllowProd = process.env.PAYMENT_MOCK_ALLOW_PROD === 'true';
+/** True when mock gateway should be used for new orders (see seedDefaultGateway). */
+const paymentMockEnabled = isProd
+  ? explicitPaymentMock && paymentMockAllowProd
+  : explicitPaymentMock || devAutoPaymentMock;
+
 const env = {
   // App
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   port: parseInt(process.env.PORT, 10) || 5000,
-  isDev: (process.env.NODE_ENV || 'development') === 'development',
-  isProd: process.env.NODE_ENV === 'production',
+  isDev: nodeEnv === 'development',
+  isProd,
+  paymentMockEnabled,
+  paymentMockAllowProd,
 
   // MongoDB
   mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/luxdate',
@@ -48,6 +64,7 @@ const env = {
   razorpay: {
     keyId: process.env.RAZORPAY_KEY_ID || '',
     keySecret: process.env.RAZORPAY_KEY_SECRET || '',
+    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
   },
 
   // Cashfree

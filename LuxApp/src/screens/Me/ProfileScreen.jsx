@@ -1,52 +1,120 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Image, Pressable,
+  View, Text, StyleSheet, ScrollView, Image, Pressable, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import theme from '../../theme/theme.js';
 import useAuthStore from '../../store/authStore.js';
+import { vipApi, coinsApi } from '../../api/services.js';
 
 const WEALTH_COLORS = ['#666', '#8B8B8B', '#B8860B', '#FFD700', '#FF6347', '#FF2D78', '#8B2FF8'];
 
+const FRAME_BORDER = {
+  none: theme.colors.accentMagenta,
+  gold: '#FFD700',
+  elite: '#DA70D6',
+};
+
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const route = useRoute();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const loadProfile = useAuthStore((s) => s.loadProfile);
 
+  const [checkinInfo, setCheckinInfo] = useState(null);
+  const [postNudge, setPostNudge] = useState(null);
+
   useFocusEffect(
     useCallback(() => {
       loadProfile();
-    }, [loadProfile])
+      coinsApi.checkinStatus().then((r) => setCheckinInfo(r.data?.data)).catch(() => setCheckinInfo(null));
+      vipApi.status().then((r) => {
+        const d = r.data?.data;
+        if (d?.justExpired) {
+          Alert.alert('VIP expired', 'Renew from VIP Plans to keep daily rewards.');
+        }
+      }).catch(() => {});
+      const p = route.params?.postCallTopUp;
+      if (p) {
+        setPostNudge(p);
+        navigation.setParams({ postCallTopUp: undefined });
+      }
+    }, [loadProfile, navigation, route.params])
   );
 
   const wealthColor = WEALTH_COLORS[Math.min(user?.wealthLevel || 0, WEALTH_COLORS.length - 1)];
+  const frameColor = FRAME_BORDER[user?.vipFrameType] || FRAME_BORDER.none;
+  const badgeLabel = user?.vipBadgeType && user.vipBadgeType !== 'none' ? user.vipBadgeType : null;
 
   const menuItems = [
     { icon: 'wallet-outline', label: 'Wallet', screen: 'Wallet', color: theme.colors.accentCyan },
     { icon: 'diamond-outline', label: 'VIP Plans', screen: 'VIPPlans', color: theme.colors.accentViolet },
     { icon: 'receipt-outline', label: 'Transactions', screen: 'TransactionHistory', color: theme.colors.textSecondary },
-    { icon: 'gift-outline', label: 'Gifts Sent', screen: 'GiftsSent', color: theme.colors.accentMagenta },
-    { icon: 'heart-outline', label: 'Relationships', screen: 'Relationships', color: theme.colors.accentRed },
   ];
+
+  const claimCheckin = async () => {
+    try {
+      const res = await coinsApi.checkinClaim();
+      const d = res.data?.data;
+      if (!d?.success && d?.error === 'already_claimed_today') {
+        await loadProfile();
+        Alert.alert('Check-in', 'Already claimed today. Come back tomorrow!');
+        return;
+      }
+      if (!d?.success) {
+        Alert.alert('Check-in', d?.message || 'Unable to claim');
+        return;
+      }
+      await loadProfile();
+      Alert.alert('Check-in', `+${d.coins} coins`);
+      const st = await coinsApi.checkinStatus();
+      setCheckinInfo(st.data?.data);
+    } catch (e) {
+      Alert.alert('Check-in', e?.response?.data?.message || e.message || 'Failed');
+    }
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* Profile Header */}
+        {postNudge ? (
+          <Pressable
+            style={styles.nudge}
+            onPress={() => {
+              setPostNudge(null);
+              navigation.navigate('CoinPack');
+            }}
+          >
+            <Ionicons name="flash" size={18} color={theme.colors.accentMagenta} />
+            <Text style={styles.nudgeText}>
+              {postNudge.balance === 0
+                ? "You're out of coins — top up to keep calling."
+                : `Only ${postNudge.balance} coins left — not enough for 2 more minutes.`}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+          </Pressable>
+        ) : null}
+
         <View style={styles.profileCard}>
           <Image
             source={{ uri: user?.profilePhotoUrl || 'https://via.placeholder.com/120' }}
-            style={styles.avatar}
+            style={[styles.avatar, { borderColor: frameColor, borderWidth: user?.vipFrameType && user.vipFrameType !== 'none' ? 3 : 2 }]}
           />
-          <Text style={styles.username}>{user?.name || user?.username || 'User'}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.username}>{user?.name || user?.username || 'User'}</Text>
+            {badgeLabel ? (
+              <View style={styles.badgeChip}>
+                <Text style={styles.badgeText}>{badgeLabel}</Text>
+              </View>
+            ) : null}
+          </View>
           <Text style={styles.meta}>
             {user?.age ? `${user.age} · ` : ''}{user?.gender || ''}{user?.location ? ` · ${user.location}` : ''}
           </Text>
 
-          {/* Wealth Level Badge */}
           <View style={[styles.wealthBadge, { borderColor: wealthColor }]}>
             <Text style={[styles.wealthText, { color: wealthColor }]}>
               ★ Level {user?.wealthLevel || 0}
@@ -54,7 +122,18 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Wallet Quick Stats */}
+        {checkinInfo?.canClaim ? (
+          <View style={styles.checkinCard}>
+            <Text style={styles.checkinTitle}>Daily check-in</Text>
+            <Text style={styles.checkinSub}>
+              Claim {checkinInfo.coinsIfClaim} coins today
+            </Text>
+            <Pressable style={styles.checkinBtn} onPress={claimCheckin}>
+              <Text style={styles.checkinBtnText}>Claim</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Ionicons name="wallet" size={20} color={theme.colors.accentCyan} />
@@ -68,22 +147,20 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.statLabel}>Points</Text>
           </View>
           <View style={styles.statDivider} />
-          <Pressable style={styles.statBox} onPress={() => navigation.navigate('CoinRecharge')}>
+          <Pressable style={styles.statBox} onPress={() => navigation.navigate('CoinPack')}>
             <Ionicons name="add-circle" size={20} color={theme.colors.accentMagenta} />
             <Text style={[styles.statValue, { color: theme.colors.accentMagenta }]}>Recharge</Text>
             <Text style={styles.statLabel}>Buy Coins</Text>
           </Pressable>
         </View>
 
-        {/* VIP Badge */}
-        {user?.isVip && (
+        {user?.isVip ? (
           <View style={styles.vipBanner}>
             <Ionicons name="diamond" size={18} color="#FFD700" />
             <Text style={styles.vipText}>VIP Active</Text>
           </View>
-        )}
+        ) : null}
 
-        {/* Menu Items */}
         <View style={styles.menu}>
           {menuItems.map((item) => (
             <Pressable
@@ -100,7 +177,6 @@ export default function ProfileScreen({ navigation }) {
           ))}
         </View>
 
-        {/* Logout */}
         <Pressable style={styles.logoutBtn} onPress={logout}>
           <Ionicons name="log-out-outline" size={20} color={theme.colors.accentRed} />
           <Text style={styles.logoutText}>Logout</Text>
@@ -115,18 +191,59 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
   scroll: { paddingHorizontal: 20 },
+  nudge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.colors.bgSecondary,
+    padding: 14,
+    borderRadius: 14,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
+  },
+  nudgeText: { flex: 1, color: theme.colors.textPrimary, fontSize: 13, fontWeight: '600' },
   profileCard: { alignItems: 'center', paddingTop: 24, paddingBottom: 16 },
   avatar: {
     width: 90, height: 90, borderRadius: 45,
-    borderWidth: 2, borderColor: theme.colors.accentMagenta,
+    borderWidth: 2,
   },
-  username: { fontSize: 22, fontWeight: '800', color: theme.colors.textPrimary, marginTop: 12 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' },
+  badgeChip: {
+    backgroundColor: 'rgba(255,215,0,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.35)',
+  },
+  badgeText: { fontSize: 11, fontWeight: '800', color: '#FFD700', textTransform: 'uppercase' },
+  username: { fontSize: 22, fontWeight: '800', color: theme.colors.textPrimary },
   meta: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 4 },
   wealthBadge: {
     marginTop: 10, borderWidth: 1.5, borderRadius: theme.radius.pill,
     paddingHorizontal: 14, paddingVertical: 4,
   },
   wealthText: { fontSize: 12, fontWeight: '700' },
+  checkinCard: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: theme.colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
+  },
+  checkinTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary },
+  checkinSub: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 4 },
+  checkinBtn: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.accentViolet,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  checkinBtnText: { color: '#FFF', fontWeight: '800' },
   statsRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: theme.colors.bgSecondary, borderRadius: theme.radius.lg,

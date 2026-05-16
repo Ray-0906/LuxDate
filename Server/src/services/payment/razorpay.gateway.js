@@ -29,7 +29,7 @@ class RazorpayGateway extends PaymentGatewayStrategy {
         {
           amount: Math.round(amount * 100), // Razorpay uses paise
           currency,
-          receipt: metadata.receipt || `rcpt_${Date.now()}`,
+          receipt: String(metadata.receipt || `rcpt_${Date.now()}`).slice(0, 40),
           notes: metadata.notes || {},
         },
         { auth: this.auth }
@@ -75,16 +75,39 @@ class RazorpayGateway extends PaymentGatewayStrategy {
       );
 
       const payments = response.data.items || [];
-      const latestPayment = payments[0];
+      const captured = payments.find((p) => p.status === 'captured') || payments[0];
 
       return {
-        status: latestPayment?.status || 'unknown',
-        paymentId: latestPayment?.id,
-        raw: latestPayment,
+        status: captured?.status || 'unknown',
+        paymentId: captured?.id,
+        raw: captured,
       };
     } catch (error) {
       logger.error({ err: error.response?.data || error.message }, 'Razorpay getPaymentStatus failed');
       throw new Error('Failed to fetch payment status');
+    }
+  }
+
+  /**
+   * Server-side confirmation: payment exists, is captured, and belongs to order.
+   */
+  async confirmCapturedPayment(orderId, paymentId) {
+    if (!paymentId) return { valid: false };
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/payments/${paymentId}`,
+        { auth: this.auth }
+      );
+      const p = response.data;
+      const ok = p.status === 'captured' && p.order_id === orderId;
+      return {
+        valid: ok,
+        gatewayPaymentId: paymentId,
+        gatewayOrderId: orderId,
+      };
+    } catch (error) {
+      logger.error({ err: error.response?.data || error.message }, 'Razorpay confirmCapturedPayment failed');
+      return { valid: false };
     }
   }
 }

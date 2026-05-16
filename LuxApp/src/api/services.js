@@ -38,23 +38,27 @@ export const mediaApi = {
 
 export const coinsApi = {
   balance: () => api.get('/coins/balance'),
+  economy: () => api.get('/coins/economy'),
   transactions: (params) => api.get('/coins/transactions', { params }),
-  packs: () => api.get('/coins/packs'),
-};
-
-export const checkinApi = {
-  claim: () => api.post('/checkin/claim'),
+  packs: (params) => api.get('/coins/packs', { params }),
+  checkinStatus: () => api.get('/coins/checkin/status'),
+  checkinClaim: () => api.post('/coins/checkin'),
 };
 
 export const vipApi = {
   plans: () => api.get('/vip/plans'),
-  purchase: (planId) => api.post('/vip/purchase', { planId }),
+  status: () => api.get('/vip/status'),
+  purchase: (planId, paymentTransactionId) => api.post('/vip/purchase', { planId, paymentTransactionId }),
 };
 
 export const paymentsApi = {
-  createOrder: (data) => api.post('/payments/create-order', data),
-  verify: (data) => api.post('/payments/verify', data),
-  history: (params) => api.get('/payments/history', { params }),
+  gateways: () => api.get('/payments/gateways'),
+  createCoinOrder: (data) => api.post('/payments/coins/order', data),
+  createVipOrder: (data) => api.post('/payments/vip/order', data),
+  verify: (transactionId, body) => api.post(`/payments/orders/${transactionId}/verify`, body),
+  reconcile: (transactionId) => api.post(`/payments/orders/${transactionId}/reconcile`),
+  orders: (params) => api.get('/payments/orders', { params }),
+  getOrder: (orderId) => api.get(`/payments/orders/${orderId}`),
 };
 
 export const giftsApi = {

@@ -16,20 +16,38 @@ const paymentController = {
   },
   async verifyPayment(req, res, next) {
     try {
-      const result = await paymentService.verifyPayment(req.params.orderId, req.body);
-      return ApiResponse.success(res, { data: result, message: result.verified ? 'Payment verified' : 'Verification failed' });
+      const result = await paymentService.verifyPayment(
+        req.user._id,
+        req.params.orderId,
+        req.body
+      );
+      return ApiResponse.success(res, {
+        data: result,
+        message: result.verified ? 'Payment verified' : 'Verification failed',
+      });
+    } catch (e) { next(e); }
+  },
+  async reconcilePayment(req, res, next) {
+    try {
+      const result = await paymentService.reconcileOrder(req.user._id, req.params.orderId);
+      return ApiResponse.success(res, { data: result, message: 'Reconcile attempt complete' });
     } catch (e) { next(e); }
   },
   async getOrder(req, res, next) {
     try {
-      const order = await paymentService.getOrder(req.params.orderId);
-      return ApiResponse.success(res, { data: { order } });
+      const order = await paymentService.getOrder(req.user._id, req.params.orderId);
+      return ApiResponse.success(res, { data: order });
     } catch (e) { next(e); }
   },
   async getMyOrders(req, res, next) {
     try {
       const result = await paymentService.getUserOrders(req.user._id, req.query);
-      return ApiResponse.paginated(res, { data: result.orders, total: result.total, page: result.page, limit: result.limit });
+      return ApiResponse.paginated(res, {
+        data: result.orders,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      });
     } catch (e) { next(e); }
   },
   async getGateways(req, res, next) {

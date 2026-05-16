@@ -1,11 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Image, Animated as RNAnimated, Dimensions, Alert } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Image, Dimensions } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import theme from '../../theme/theme.js';
 import { callsApi } from '../../api/services.js';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, withSequence } from 'react-native-reanimated';
 import TriggerEngine from '../../engines/TriggerEngine.js';
+import CoinPackSheet from '../../components/CoinPackSheet.jsx';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -14,16 +15,44 @@ export default function OutgoingCallScreen({ route, navigation }) {
   const { girl } = route.params;
 
   const [statusText, setStatusText] = useState('Calling...');
-  
+  const [showCoinSheet, setShowCoinSheet] = useState(false);
+
   const pulseScale = useSharedValue(1);
   const ringOpacity = useSharedValue(0.6);
 
+  const tryAccept = useCallback(async () => {
+    setStatusText('Connecting...');
+    try {
+      const res = await callsApi.accept(girl._id, { params: { isDirect: true } });
+      const data = res.data.data;
+
+      navigation.replace('VideoCall', {
+        callData: {
+          callId: data.session._id,
+          girl,
+          videoUrl: girl.videoUrl || 'https://www.w3schools.com/html/mov_bbb.mp4',
+          callType: data.session.callType,
+          coinBalance: data.coinBalance,
+          costPerMinute: data.costPerMinute,
+        },
+      });
+    } catch (err) {
+      const st = err?.response?.status;
+      const paywall = err?.response?.data?.paywallType;
+      if (st === 402 || paywall === 'coins_only' || paywall === 'insufficient_coins') {
+        setShowCoinSheet(true);
+        setStatusText('Need more coins to connect.');
+      } else {
+        setStatusText('Failed to connect or insufficient coins.');
+        setTimeout(() => navigation.goBack(), 2000);
+      }
+    }
+  }, [girl, navigation]);
+
   useEffect(() => {
     TriggerEngine.setBlockedContext(true);
-    
+
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      // If we are navigating to VideoCall (replace), keep it blocked
-      // Otherwise, if going back or elsewhere, unblock.
       if (e.data.action.type !== 'REPLACE') {
         TriggerEngine.setBlockedContext(false);
       }
@@ -58,35 +87,12 @@ export default function OutgoingCallScreen({ route, navigation }) {
   }));
 
   useEffect(() => {
-    // Simulate 10-15 seconds wait
-    const ringDuration = Math.floor(Math.random() * 5000) + 10000; // 10k to 15k ms
-
-    const timeout = setTimeout(async () => {
-      setStatusText('Connecting...');
-      
-      try {
-        // We simulate a direct pick up by accepting a call for this girl
-        const res = await callsApi.accept(girl._id, { params: { isDirect: true } });
-        const data = res.data.data;
-        
-        navigation.replace('VideoCall', {
-          callData: {
-            callId: data.session._id,
-            girl,
-            videoUrl: girl.videoUrl || 'https://www.w3schools.com/html/mov_bbb.mp4',
-            callType: data.session.callType,
-            coinBalance: data.coinBalance,
-            costPerMinute: data.costPerMinute
-          }
-        });
-      } catch (err) {
-        setStatusText('Failed to connect or insufficient coins.');
-        setTimeout(() => navigation.goBack(), 2000);
-      }
+    const ringDuration = Math.floor(Math.random() * 5000) + 10000;
+    const timeout = setTimeout(() => {
+      tryAccept();
     }, ringDuration);
-
     return () => clearTimeout(timeout);
-  }, [girl, navigation]);
+  }, [tryAccept]);
 
   const handleHangup = () => {
     TriggerEngine.setBlockedContext(false);
@@ -121,6 +127,16 @@ export default function OutgoingCallScreen({ route, navigation }) {
           </View>
         </View>
       </View>
+
+      <CoinPackSheet
+        visible={showCoinSheet}
+        onClose={() => setShowCoinSheet(false)}
+        context="call"
+        onSuccess={() => {
+          setShowCoinSheet(false);
+          tryAccept();
+        }}
+      />
     </View>
   );
 }

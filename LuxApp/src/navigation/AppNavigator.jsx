@@ -24,6 +24,10 @@ import IncomingCallScreen from '../screens/IncomingCall/IncomingCallScreen.jsx';
 import OutgoingCallScreen from '../screens/OutgoingCall/OutgoingCallScreen.jsx';
 import VideoCallScreen from '../screens/VideoCall/VideoCallScreen.jsx';
 import ConversationScreen from '../screens/Chat/ConversationScreen.jsx';
+import WalletScreen from '../screens/Me/WalletScreen.jsx';
+import CoinPackScreen from '../screens/Me/CoinPackScreen.jsx';
+import VIPPlansScreen from '../screens/Me/VIPPlansScreen.jsx';
+import TransactionHistoryScreen from '../screens/Me/TransactionHistoryScreen.jsx';
 
 export const navigationRef = createNavigationContainerRef();
 
@@ -129,10 +133,29 @@ function AppStack() {
         component={VideoCallScreen}
         options={{ animation: 'fade' }}
       />
-      {/* <Stack.Screen name="Wallet" component={WalletScreen} /> */}
-      {/* <Stack.Screen name="VIPPlans" component={VIPPlansScreen} /> */}
-      {/* <Stack.Screen name="CoinRecharge" component={CoinRechargeSheet} /> */}
-      {/* <Stack.Screen name="TransactionHistory" component={TransactionHistoryScreen} /> */}
+      <Stack.Screen
+        name="Wallet"
+        component={WalletScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CoinPack"
+        component={CoinPackScreen}
+        options={{ 
+          presentation: 'transparentModal', 
+          animation: 'fade' 
+        }}
+      />
+      <Stack.Screen
+        name="VIPPlans"
+        component={VIPPlansScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="TransactionHistory"
+        component={TransactionHistoryScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
     </Stack.Navigator>
   );
 }

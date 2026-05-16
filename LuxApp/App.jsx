@@ -7,6 +7,7 @@ import MessageTriggerEngine from './src/engines/MessageTriggerEngine';
 import socketService from './src/api/socket.js';
 import useAuthStore from './src/store/authStore.js';
 import useChatBadgeStore from './src/store/chatBadgeStore.js';
+import { paymentsApi } from './src/api/services.js';
 
 const App = () => {
   const appState = useRef(AppState.currentState);
@@ -36,6 +37,15 @@ const App = () => {
         // App has come to the foreground!
         MessageTriggerEngine.resumeForeground();
         handleUnreadRefresh();
+        (async () => {
+          try {
+            const res = await paymentsApi.orders({ status: 'created', minAgeMinutes: 2, limit: 10 });
+            const list = res.data?.data || [];
+            for (const o of list) {
+              await paymentsApi.reconcile(o._id).catch(() => {});
+            }
+          } catch { /* ignore */ }
+        })();
       } else if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
         // App has gone to the background!
         MessageTriggerEngine.pauseForeground();

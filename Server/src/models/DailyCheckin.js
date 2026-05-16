@@ -5,6 +5,11 @@ const dailyCheckinSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     date: { type: String, required: true },
     coinsAwarded: { type: Number, required: true },
+    coinTransactionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CoinTransaction',
+      default: null,
+    },
     source: {
       type: String,
       enum: ['vip_plan', 'free_login'],

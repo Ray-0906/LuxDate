@@ -33,6 +33,9 @@ import giftRoutes from './src/routes/gift.routes.js';
 import videoCallRoutes from './src/routes/videoCall.routes.js';
 import vipRoutes from './src/routes/vip.routes.js';
 import coinRoutes from './src/routes/coin.routes.js';
+import webhookRoutes from './src/routes/webhook.routes.js';
+import adminCoinPackRoutes from './src/routes/admin/admin.coinPack.routes.js';
+import adminPaymentRoutes from './src/routes/admin/admin.payment.routes.js';
 
 // ─── App Setup ──────────────────────────────────────────
 const app = express();
@@ -42,6 +45,10 @@ const httpServer = createServer(app);
 app.use(helmet({ crossOriginResourcePolicy: false })); // allow images/videos to be loaded cross-origin
 app.use(cors(corsOptions));
 app.use(compression());
+
+// Razorpay webhooks need raw body for signature verification
+app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhookRoutes);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static('public'));
@@ -82,6 +89,8 @@ app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/chat', adminChatRoutes);
 app.use('/api/admin/gifts', adminGiftRoutes);
 app.use('/api/admin/vip', adminVipRoutes);
+app.use('/api/admin/coin-packs', adminCoinPackRoutes);
+app.use('/api/admin/payments', adminPaymentRoutes);
 app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/users', userRoutes);
@@ -114,6 +123,25 @@ const start = async () => {
   try {
     // Connect to MongoDB
     await connectDB();
+
+    const { default: paymentService } = await import('./src/services/payment/payment.service.js');
+    const { default: coinPackService } = await import('./src/services/coinPack.service.js');
+    const { default: appSettingService } = await import('./src/services/appSetting.service.js');
+    await paymentService.seedDefaultGateway();
+    await coinPackService.seedDefaultPacksIfEmpty();
+    await appSettingService.seedDefaults();
+
+    const { default: cron } = await import('node-cron');
+    const { default: vipService } = await import('./src/services/vip.service.js');
+    const { default: MonetizationController } = await import('./src/engines/MonetizationController.js');
+    cron.schedule('0 * * * *', async () => {
+      try {
+        await vipService.checkExpiry();
+        await MonetizationController.reconcileOrphanCheckins();
+      } catch (err) {
+        logger.error({ err }, 'Hourly monetization cron failed');
+      }
+    });
 
     httpServer.listen(env.port, () => {
       logger.info(`🚀 LuxDate Server running on port ${env.port} [${env.nodeEnv}]`);

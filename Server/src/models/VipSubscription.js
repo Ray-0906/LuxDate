@@ -11,9 +11,11 @@ const vipSubscriptionSchema = new mongoose.Schema(
     dailyCheckinsClaimed: { type: Number, default: 0 },
     status: {
       type: String,
-      enum: ['active', 'expired'],
+      enum: ['active', 'expired', 'replaced'],
       default: 'active',
     },
+    replacedAt: { type: Date, default: null },
+    unclaimedCoinsForfeited: { type: Number, default: 0 },
     paymentTransactionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'PaymentTransaction',

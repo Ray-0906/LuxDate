@@ -30,6 +30,7 @@ import { EmojiKeyboard } from 'rn-emoji-keyboard';
 import GiftPickerModal from '../../components/GiftPickerModal.jsx';
 import GiftBurstOverlay from '../../components/GiftBurstOverlay.jsx';
 import InsufficientCoinsModal from '../../components/InsufficientCoinsModal.jsx';
+import CoinPackSheet from '../../components/CoinPackSheet.jsx';
 
 export default function ConversationScreen({ route, navigation }) {
   const { girl } = route.params || {};
@@ -44,6 +45,7 @@ export default function ConversationScreen({ route, navigation }) {
   const [recentPhotos, setRecentPhotos] = useState([]);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [showCoinsModal, setShowCoinsModal] = useState(false);
+  const [showCoinPackSheet, setShowCoinPackSheet] = useState(false);
   const [coinsModalBalance, setCoinsModalBalance] = useState(0);
   const [coinsModalRequired, setCoinsModalRequired] = useState(0);
   const [giftBurst, setGiftBurst] = useState(null);
@@ -468,10 +470,21 @@ export default function ConversationScreen({ route, navigation }) {
         coinBalance={coinsModalBalance}
         requiredCoins={coinsModalRequired}
         onClose={() => setShowCoinsModal(false)}
+        onBuyCoins={() => {
+          setShowCoinsModal(false);
+          setShowCoinPackSheet(true);
+        }}
         onGoWallet={() => {
           setShowCoinsModal(false);
-          navigation.navigate('MainTabs', { screen: 'Me' });
+          navigation.navigate('Wallet');
         }}
+      />
+
+      <CoinPackSheet
+        visible={showCoinPackSheet}
+        onClose={() => setShowCoinPackSheet(false)}
+        context="gift"
+        requiredCoins={coinsModalRequired}
       />
 
       <Modal visible={levelUp !== null} transparent animationType="fade" onRequestClose={() => setLevelUp(null)}>

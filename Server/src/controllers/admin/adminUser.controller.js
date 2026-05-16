@@ -47,10 +47,12 @@ const adminUserController = {
 
   async addCoins(req, res, next) {
     try {
-      const { amount, note } = req.body;
+      const { amount, note, description } = req.body;
       const result = await coinService.credit(
-        req.params.userId, amount, COIN_TX_TYPES.ADMIN_CREDIT,
-        { note: note || 'Admin credit' }
+        req.params.userId,
+        amount,
+        COIN_TX_TYPES.ADMIN_ADJUST,
+        { note: note || description || 'Admin credit' }
       );
       return ApiResponse.success(res, { data: result, message: 'Coins added' });
     } catch (e) { next(e); }
@@ -58,10 +60,12 @@ const adminUserController = {
 
   async deductCoins(req, res, next) {
     try {
-      const { amount, note } = req.body;
+      const { amount, note, description } = req.body;
       const result = await coinService.debit(
-        req.params.userId, amount, COIN_TX_TYPES.ADMIN_DEBIT,
-        { note: note || 'Admin deduction' }
+        req.params.userId,
+        amount,
+        COIN_TX_TYPES.ADMIN_ADJUST,
+        { note: note || description || 'Admin deduction' }
       );
       return ApiResponse.success(res, { data: result, message: 'Coins deducted' });
     } catch (e) { next(e); }

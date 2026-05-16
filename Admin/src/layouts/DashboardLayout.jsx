@@ -6,7 +6,7 @@ import {
   HiOutlineChatBubbleLeftRight, HiOutlineGift, HiOutlineStar,
   HiOutlineCog6Tooth, HiOutlineArrowRightOnRectangle,
   HiOutlineVideoCamera, HiOutlineCurrencyDollar, HiOutlineBars3,
-  HiOutlineXMark
+  HiOutlineXMark, HiOutlineShoppingBag
 } from 'react-icons/hi2';
 
 const navItems = [
@@ -15,7 +15,7 @@ const navItems = [
   { to: '/girls', icon: HiOutlineHeart, label: 'Girls' },
   { to: '/chat', icon: HiOutlineChatBubbleLeftRight, label: 'Chat' },
   { to: '/gifts', icon: HiOutlineGift, label: 'Gifts' },
-  { to: '/vip', icon: HiOutlineStar, label: 'VIP Plans' },
+  { to: '/coin-packs', icon: HiOutlineShoppingBag, label: 'Coin packs' },
   { to: '/calls', icon: HiOutlineVideoCamera, label: 'Call Logs' },
   { to: '/payments', icon: HiOutlineCurrencyDollar, label: 'Payments' },
   { to: '/settings', icon: HiOutlineCog6Tooth, label: 'Settings' },

@@ -12,12 +12,13 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { VideoView, useVideoPlayer } from 'react-native-video';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import theme from '../../theme/theme.js';
-import { callsApi } from '../../api/services.js';
+import { callsApi, coinsApi } from '../../api/services.js';
 import useAuthStore from '../../store/authStore.js';
 import TriggerEngine from '../../engines/TriggerEngine.js';
 import GiftPickerModal from '../../components/GiftPickerModal.jsx';
 import GiftBurstOverlay from '../../components/GiftBurstOverlay.jsx';
 import InsufficientCoinsModal from '../../components/InsufficientCoinsModal.jsx';
+import CoinPackSheet from '../../components/CoinPackSheet.jsx';
 import useChatUIStore from '../../store/chatUIStore.js';
 import socketService from '../../api/socket.js';
 
@@ -37,6 +38,7 @@ export default function VideoCallScreen({ route, navigation }) {
   const [liveCoinBalance, setLiveCoinBalance] = useState(coinBalance || 0);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [showCoinsModal, setShowCoinsModal] = useState(false);
+  const [showCoinPackSheet, setShowCoinPackSheet] = useState(false);
   const [coinsModalBalance, setCoinsModalBalance] = useState(0);
   const [coinsModalRequired, setCoinsModalRequired] = useState(0);
   const [giftBurst, setGiftBurst] = useState(null);
@@ -138,23 +140,40 @@ export default function VideoCallScreen({ route, navigation }) {
 
   const handleEnd = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    let finalBalance = liveCoinBalance;
     try {
       const res = await callsApi.end(callId, { status: 'accepted' });
       if (res?.data?.data?.coinBalance !== undefined) {
+        finalBalance = res.data.data.coinBalance;
         const authStore = useAuthStore.getState();
         authStore.setUser({ ...authStore.user, coinBalance: res.data.data.coinBalance });
         setLiveCoinBalance(res.data.data.coinBalance);
       }
       await loadProfile();
+      const u = useAuthStore.getState().user;
+      if (u?.coinBalance != null) finalBalance = u.coinBalance;
     } catch (e) {
       console.log('End call error:', e);
     }
-    if (navigation.canGoBack()) {
+
+    let costPerMin = costPerMinute;
+    try {
+      const econ = await coinsApi.economy();
+      costPerMin = econ.data?.data?.callCostPerMinute ?? costPerMin;
+    } catch { /* use passed cost */ }
+
+    const threshold = (costPerMin || 10) * 2;
+    if (finalBalance < threshold) {
+      navigation.navigate('MainTabs', {
+        screen: 'Me',
+        params: { postCallTopUp: { balance: finalBalance } },
+      });
+    } else if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
       navigation.navigate('Inbox');
     }
-  }, [callId, loadProfile, navigation]);
+  }, [callId, costPerMinute, liveCoinBalance, loadProfile, navigation]);
 
   useEffect(() => {
     timerRef.current = setInterval(() => {
@@ -320,10 +339,21 @@ export default function VideoCallScreen({ route, navigation }) {
         coinBalance={coinsModalBalance}
         requiredCoins={coinsModalRequired}
         onClose={() => setShowCoinsModal(false)}
+        onBuyCoins={() => {
+          setShowCoinsModal(false);
+          setShowCoinPackSheet(true);
+        }}
         onGoWallet={() => {
           setShowCoinsModal(false);
-          navigation.navigate('MainTabs', { screen: 'Me' });
+          navigation.navigate('Wallet');
         }}
+      />
+
+      <CoinPackSheet
+        visible={showCoinPackSheet}
+        onClose={() => setShowCoinPackSheet(false)}
+        context="call"
+        requiredCoins={coinsModalRequired}
       />
     </View>
   );

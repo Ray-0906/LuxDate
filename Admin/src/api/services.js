@@ -52,6 +52,17 @@ export const vipApi = {
   listSubscriptions: (params) => api.get('/admin/vip/subscriptions', { params }),
 };
 
+export const coinPacksApi = {
+  list: () => api.get('/admin/coin-packs'),
+  create: (data) => api.post('/admin/coin-packs', data),
+  update: (id, data) => api.put(`/admin/coin-packs/${id}`, data),
+  delete: (id) => api.delete(`/admin/coin-packs/${id}`),
+};
+
+export const paymentsAdminApi = {
+  transactions: (params) => api.get('/admin/payments/transactions', { params }),
+};
+
 export const settingsApi = {
   getAll: (group) => api.get('/admin/settings', { params: { group } }),
   set: (key, value, group, description) => api.post('/admin/settings', { key, value, group, description }),

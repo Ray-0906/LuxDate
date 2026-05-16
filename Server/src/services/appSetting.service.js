@@ -44,7 +44,8 @@ const appSettingService = {
         { coins: 500, price: 199, label: 'Popular' },
         { coins: 1200, price: 399, label: 'Best Value' },
         { coins: 3000, price: 899, label: 'Premium' },
-      ], group: 'coins', description: 'Coin purchase packages' },
+      ], group: 'coins', description: 'Coin purchase packages (legacy JSON; prefer CoinPack model)' },
+      { key: 'free_login_checkin_coins', value: 5, group: 'coins', description: 'Daily check-in reward for non-VIP users' },
       { key: 'app_name', value: 'LuxDate', group: 'branding', description: 'Application name' },
       { key: 'support_email', value: 'support@luxdate.app', group: 'general', description: 'Support email' },
     ];

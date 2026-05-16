@@ -12,6 +12,7 @@ export default function InsufficientCoinsModal({
   visible,
   onClose,
   onGoWallet,
+  onBuyCoins,
   coinBalance = 0,
   requiredCoins = 0,
 }) {
@@ -29,14 +30,24 @@ export default function InsufficientCoinsModal({
             </Text>
           ) : null}
           <Text style={styles.subtle}>
-            Recharge from Wallet to keep gifting.
+            Buy a coin pack to continue.
           </Text>
           <View style={styles.actions}>
             <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>
               <Text style={styles.btnGhostText}>Later</Text>
             </Pressable>
-            <Pressable style={[styles.btn, styles.btnPrimary]} onPress={onGoWallet}>
-              <Text style={styles.btnPrimaryText}>Open Wallet</Text>
+            <Pressable
+              style={[styles.btn, styles.btnPrimary]}
+              onPress={() => {
+                if (onBuyCoins) {
+                  onClose();
+                  onBuyCoins();
+                } else {
+                  onGoWallet();
+                }
+              }}
+            >
+              <Text style={styles.btnPrimaryText}>{onBuyCoins ? 'Buy coins' : 'Open Wallet'}</Text>
             </Pressable>
           </View>
         </View>

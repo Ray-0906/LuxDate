@@ -14,6 +14,10 @@ const vipPlanSchema = new mongoose.Schema(
     durationDays: { type: Number, required: true },
     upfrontCoins: { type: Number, default: 0 },
     dailyCheckinCoins: { type: Number, default: 0 },
+    /** Optional UX total; must match upfrontCoins + dailyCheckinCoins * (durationDays - 1) */
+    totalCoins: { type: Number, default: 0 },
+    frameType: { type: String, default: 'none' },
+    badgeType: { type: String, default: 'none' },
     bonusPerks: [{ type: String }],
     isActive: { type: Boolean, default: true },
   },

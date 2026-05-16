@@ -8,6 +8,8 @@ import AutoReplyPool from '../models/AutoReplyPool.js';
 import GirlProfile from '../models/Girl.js';
 import Gift from '../models/Gift.js';
 import VipPlan from '../models/VipPlan.js';
+import { VIP_TYPES } from '../utils/constants.js';
+import { computeVipCoinSplit } from '../utils/vipDistribution.js';
 
 async function seed() {
   await mongoose.connect(process.env.MONGO_URI || env.mongoUri);
@@ -138,17 +140,57 @@ async function seed() {
   }
   console.log(`Seeded ${gifts.length} gifts`);
 
+  const weekly = computeVipCoinSplit(800, 7);
+  const monthly = computeVipCoinSplit(4500, 30);
+  const elite = computeVipCoinSplit(9000, 30);
+
   const plans = [
-    { name: 'Weekly VIP', price: 99, durationDays: 7, dailyCheckinCoins: 10, upfrontCoins: 50, badge: 'STAR', perks: ['10 coins/day check-in', '50 bonus coins', 'Priority feed'] },
-    { name: 'Monthly VIP', price: 299, durationDays: 30, dailyCheckinCoins: 15, upfrontCoins: 200, badge: 'DIAMOND', perks: ['15 coins/day check-in', '200 bonus coins', 'Priority feed', 'Exclusive profiles'] },
-    { name: 'Quarterly VIP', price: 699, durationDays: 90, dailyCheckinCoins: 20, upfrontCoins: 600, badge: 'CROWN', perks: ['20 coins/day check-in', '600 bonus coins', 'All perks', 'VIP badge'] },
+    {
+      name: 'Weekly VIP',
+      type: VIP_TYPES.WEEKLY,
+      price: 99,
+      durationDays: 7,
+      upfrontCoins: weekly.upfrontCoins,
+      dailyCheckinCoins: weekly.dailyCheckinCoins,
+      totalCoins: 800,
+      frameType: 'gold',
+      badgeType: 'star',
+      bonusPerks: ['Priority feed', 'VIP frame'],
+      isActive: true,
+    },
+    {
+      name: 'Monthly VIP',
+      type: VIP_TYPES.MONTHLY,
+      price: 299,
+      durationDays: 30,
+      upfrontCoins: monthly.upfrontCoins,
+      dailyCheckinCoins: monthly.dailyCheckinCoins,
+      totalCoins: 4500,
+      frameType: 'gold',
+      badgeType: 'diamond',
+      bonusPerks: ['Priority feed', 'Exclusive profiles'],
+      isActive: true,
+    },
+    {
+      name: 'Elite Monthly',
+      type: VIP_TYPES.ELITE_MONTHLY,
+      price: 599,
+      durationDays: 30,
+      upfrontCoins: elite.upfrontCoins,
+      dailyCheckinCoins: elite.dailyCheckinCoins,
+      totalCoins: 9000,
+      frameType: 'elite',
+      badgeType: 'crown',
+      bonusPerks: ['All VIP perks', 'Elite badge'],
+      isActive: true,
+    },
   ];
 
   for (const plan of plans) {
     await VipPlan.findOneAndUpdate(
       { name: plan.name },
       plan,
-      { upsert: true, new: true }
+      { upsert: true, new: true, runValidators: true }
     );
   }
   console.log(`Seeded ${plans.length} VIP plans`);

@@ -9,6 +9,9 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [coinModal, setCoinModal] = useState(null);
+  const [coinAmount, setCoinAmount] = useState('');
+  const [coinNote, setCoinNote] = useState('');
 
   useEffect(() => { loadUsers(); }, [page]);
 
@@ -26,6 +29,29 @@ export default function UsersPage() {
     e.preventDefault();
     setPage(1);
     loadUsers();
+  };
+
+  const submitCoins = async (mode) => {
+    if (!coinModal || !coinAmount) return;
+    const amt = Number(coinAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      toast.error('Invalid amount');
+      return;
+    }
+    try {
+      if (mode === 'add') {
+        await usersApi.addCoins(coinModal._id, amt, coinNote || 'Admin credit');
+      } else {
+        await usersApi.deductCoins(coinModal._id, amt, coinNote || 'Admin debit');
+      }
+      toast.success('Balance updated');
+      setCoinModal(null);
+      setCoinAmount('');
+      setCoinNote('');
+      loadUsers();
+    } catch {
+      toast.error('Failed');
+    }
   };
 
   const toggleBlock = async (userId) => {
@@ -92,14 +118,24 @@ export default function UsersPage() {
                     {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
                   </td>
                   <td>
-                    <button
-                      onClick={() => toggleBlock(u._id)}
-                      className="btn btn-ghost btn-sm"
-                      style={{ gap: 4 }}
-                    >
-                      {u.isBlocked ? <HiOutlineCheckCircle size={14} /> : <HiOutlineNoSymbol size={14} />}
-                      {u.isBlocked ? 'Unblock' : 'Block'}
-                    </button>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => { setCoinModal(u); setCoinAmount(''); setCoinNote(''); }}
+                        className="btn btn-ghost btn-sm"
+                      >
+                        Coins
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleBlock(u._id)}
+                        className="btn btn-ghost btn-sm"
+                        style={{ gap: 4 }}
+                      >
+                        {u.isBlocked ? <HiOutlineCheckCircle size={14} /> : <HiOutlineNoSymbol size={14} />}
+                        {u.isBlocked ? 'Unblock' : 'Block'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -120,6 +156,57 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+
+      {coinModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+            padding: 16,
+          }}
+          onClick={() => { setCoinModal(null); setCoinAmount(''); setCoinNote(''); }}
+        >
+          <div
+            className="card"
+            style={{ width: 'min(400px, 100%)', padding: 24 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Adjust coins</h2>
+            <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 16 }}>
+              {coinModal.name || 'User'} — current <strong style={{ color: 'var(--accent)' }}>{coinModal.coinBalance ?? 0}</strong>
+            </p>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Amount</label>
+            <input
+              type="number"
+              min={1}
+              value={coinAmount}
+              onChange={(e) => setCoinAmount(e.target.value)}
+              placeholder="e.g. 100"
+              style={{ width: '100%', marginBottom: 12 }}
+            />
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Note (optional)</label>
+            <input
+              value={coinNote}
+              onChange={(e) => setCoinNote(e.target.value)}
+              placeholder="Reason for adjustment"
+              style={{ width: '100%', marginBottom: 20 }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setCoinModal(null); setCoinAmount(''); setCoinNote(''); }}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-sm" style={{ background: 'var(--error)', color: '#fff' }} onClick={() => submitCoins('deduct')}>
+                Deduct
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => submitCoins('add')}>
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

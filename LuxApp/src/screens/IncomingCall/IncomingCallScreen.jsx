@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Image, Pressable, Dimensions, Vibration,
 } from 'react-native';
@@ -9,6 +9,7 @@ import Animated, {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import theme from '../../theme/theme.js';
 import { callsApi } from '../../api/services.js';
+import CoinPackSheet from '../../components/CoinPackSheet.jsx';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -16,6 +17,7 @@ export default function IncomingCallScreen({ route, navigation }) {
   const callData = route.params?.callData || route.params || {};
   const { girl, callId, triggerType, videoUrl, callType } = callData;
   const timerRef = useRef(null);
+  const [showCoinSheet, setShowCoinSheet] = useState(false);
 
   // Pulse animation for accept button
   const pulseScale = useSharedValue(1);
@@ -73,10 +75,14 @@ export default function IncomingCallScreen({ route, navigation }) {
         callData: finalCallData
       });
     } catch (e) {
-      // 402 Payment Required or other error
       console.log('Accept call failed:', e?.response?.data || e.message);
-      // For now, close the modal. Later hook up to Coin Recharge modal!
-      navigation.goBack();
+      const st = e?.response?.status;
+      const paywall = e?.response?.data?.paywallType;
+      if (st === 402 || paywall === 'coins_only' || paywall === 'insufficient_coins') {
+        setShowCoinSheet(true);
+      } else {
+        navigation.goBack();
+      }
     }
   };
 
@@ -139,6 +145,16 @@ export default function IncomingCallScreen({ route, navigation }) {
         <Text style={styles.labelText}>Decline</Text>
         <Text style={styles.labelText}>Accept</Text>
       </View>
+
+      <CoinPackSheet
+        visible={showCoinSheet}
+        onClose={() => setShowCoinSheet(false)}
+        context="call"
+        onSuccess={() => {
+          setShowCoinSheet(false);
+          handleAccept();
+        }}
+      />
     </View>
   );
 }

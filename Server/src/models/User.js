@@ -21,6 +21,8 @@ const userSchema = new mongoose.Schema(
     // VIP
     isVip: { type: Boolean, default: false },
     vipExpiresAt: { type: Date, default: null },
+    vipFrameType: { type: String, default: 'none' },
+    vipBadgeType: { type: String, default: 'none' },
 
     // Flags
     isBlocked: { type: Boolean, default: false },

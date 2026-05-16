@@ -8,7 +8,7 @@ import UsersPage from './pages/UsersPage.jsx';
 import GirlsPage from './pages/GirlsPage.jsx';
 import ChatPage from './pages/ChatPage.jsx';
 import GiftsPage from './pages/GiftsPage.jsx';
-import VipPage from './pages/VipPage.jsx';
+import CoinPacksPage from './pages/CoinPacksPage.jsx';
 import CallsPage from './pages/CallsPage.jsx';
 import PaymentsPage from './pages/PaymentsPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
@@ -43,6 +43,7 @@ export default function App() {
           <Route path="girls" element={<GirlsPage />} />
           <Route path="chat" element={<ChatPage />} />
           <Route path="gifts" element={<GiftsPage />} />
+          <Route path="coin-packs" element={<CoinPacksPage />} />
           <Route path="vip" element={<VipPage />} />
           <Route path="calls" element={<CallsPage />} />
           <Route path="payments" element={<PaymentsPage />} />

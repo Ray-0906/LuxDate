@@ -78,6 +78,7 @@ export const PAYMENT_STATUS = {
 // Payment gateways
 export const PAYMENT_GATEWAYS = {
   RAZORPAY: 'razorpay',
+  MOCK: 'mock',
 };
 
 // VIP plan types
