@@ -57,7 +57,7 @@ const coinController = {
 
   async claimCheckin(req, res, next) {
     try {
-      const result = await MonetizationController.claimDailyCheckin(req.user._id);
+      const result = await MonetizationController.claimDailyCheckin(req.user._id, req.body || {});
       if (!result.success) {
         return ApiResponse.success(res, { data: result, message: result.message || 'Check-in not available' });
       }

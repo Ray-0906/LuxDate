@@ -33,6 +33,7 @@ export default function CoinPackScreen({ navigation }) {
   const [step, setStep] = useState('packages'); // 'packages' | 'gateways'
   const [gateways, setGateways] = useState([]);
   const [selectedGateway, setSelectedGateway] = useState(null);
+  const [loadingGateways, setLoadingGateways] = useState(false);
 
   // Still keeping mock pay confirm separate for security pin etc
   const [mockPay, setMockPay] = useState({ visible: false, amountInr: 0, purposeLabel: '' });
@@ -124,17 +125,23 @@ export default function CoinPackScreen({ navigation }) {
 
   const handleBuy = async (pack) => {
     let fetchedGateways;
+    setLoadingGateways(true);
     setBuyingId(pack._id);
     try {
       fetchedGateways = await fetchPaymentGatewayNames();
     } catch (e) {
-      setBuyingId(null);
       Alert.alert('Error', e?.message || 'Could not load payment options');
       return;
+    } finally {
+      setLoadingGateways(false);
+      setBuyingId(null);
     }
-    setBuyingId(null);
     if (fetchedGateways.length === 0) {
       Alert.alert('Error', 'No payment gateways available');
+      return;
+    }
+    if (fetchedGateways.length === 1) {
+      await runCheckout(pack, fetchedGateways[0]);
       return;
     }
     setGateways(fetchedGateways);
@@ -261,7 +268,9 @@ export default function CoinPackScreen({ navigation }) {
              disabled={(step === 'packages' ? !selectedPackId : !selectedGateway) || !!buyingId} 
              style={[styles.continueBtn, ((step === 'packages' ? !selectedPackId : !selectedGateway) || !!buyingId) && styles.continueBtnDisabled]}
            >
-             <Text style={styles.continueBtnText}>{buyingId ? "Loading..." : "Continue"}</Text>
+             <Text style={styles.continueBtnText}>
+               {loadingGateways ? 'Loading payment methods...' : buyingId ? 'Processing...' : 'Continue'}
+             </Text>
            </Pressable>
         </View>
       )}

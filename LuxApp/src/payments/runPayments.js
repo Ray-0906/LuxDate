@@ -21,7 +21,10 @@ function assertPaymentVerified(verifyRes) {
 export async function fetchPaymentGatewayNames() {
   const res = await paymentsApi.gateways();
   const gateways = res.data?.data?.gateways ?? res.data?.gateways ?? [];
-  return [...new Set(gateways.map((g) => g.name).filter(Boolean))];
+  const names = gateways
+    .map((g) => (typeof g === 'string' ? g : g?.name || g?.code || g?.gateway))
+    .filter(Boolean);
+  return [...new Set(names)];
 }
 
 async function createCoinOrderSafe({ packId, gateway }) {
@@ -86,6 +89,26 @@ async function verifyAfterOrder(gatewayData, paymentDataOrNull, { confirmMockUi 
   return assertPaymentVerified(verifyRes);
 }
 
+function withTimeout(promise, timeoutMs, timeoutMessage) {
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
+function normalizeGatewayData(payload, selectedGateway, purposeLabel) {
+  const rawGatewayData = payload?.gatewayData || {};
+  return {
+    ...rawGatewayData,
+    gateway: rawGatewayData.gateway || payload?.gateway || selectedGateway,
+    transactionId: rawGatewayData.transactionId || payload?.transactionId,
+    mockCompletionNonce: rawGatewayData.mockCompletionNonce || payload?.mockCompletionNonce,
+    amountInr: rawGatewayData.amountInr || payload?.amountInr || 0,
+    purposeLabel,
+  };
+}
+
 /**
  * @param {string} packId
  * @param {{ phone?: string, gateway: string, confirmMockUi?: function }} opts
@@ -110,13 +133,19 @@ export async function checkoutAndVerifyCoinPack(packId, { phone = '', gateway, c
   }
   const orderRes = await createCoinOrderSafe({ packId, gateway });
   const payload = orderRes.data?.data || orderRes.data;
-  const gatewayData = { ...payload.gatewayData, purposeLabel: 'LuxDate coins' };
-  if (!gatewayData?.orderId || !gatewayData?.keyId) {
-    throw new Error('Invalid order response');
-  }
+  const gatewayData = normalizeGatewayData(payload, gateway, 'LuxDate coins');
 
   if (gatewayData.gateway === GW_MOCK) {
-    return verifyAfterOrder(gatewayData, null, { confirmMockUi });
+    await withTimeout(
+      verifyAfterOrder(gatewayData, null, { confirmMockUi }),
+      90_000,
+      'Mock payment confirmation timed out. Please try again.'
+    );
+    return;
+  }
+
+  if (!gatewayData?.orderId || !gatewayData?.keyId) {
+    throw new Error('Invalid order response');
   }
 
   const options = {
@@ -155,13 +184,19 @@ export async function checkoutAndVerifyVip(planId, { phone = '', gateway, confir
   }
   const orderRes = await createVipOrderSafe({ planId, gateway });
   const payload = orderRes.data?.data || orderRes.data;
-  const gatewayData = { ...payload.gatewayData, purposeLabel: 'LuxDate VIP' };
-  if (!gatewayData?.orderId || !gatewayData?.keyId) {
-    throw new Error('Invalid order response');
-  }
+  const gatewayData = normalizeGatewayData(payload, gateway, 'LuxDate VIP');
 
   if (gatewayData.gateway === GW_MOCK) {
-    return verifyAfterOrder(gatewayData, null, { confirmMockUi });
+    await withTimeout(
+      verifyAfterOrder(gatewayData, null, { confirmMockUi }),
+      90_000,
+      'Mock payment confirmation timed out. Please try again.'
+    );
+    return;
+  }
+
+  if (!gatewayData?.orderId || !gatewayData?.keyId) {
+    throw new Error('Invalid order response');
   }
 
   const options = {

@@ -15,6 +15,37 @@ const dailyCheckinSchema = new mongoose.Schema(
       enum: ['vip_plan', 'free_login'],
       required: true,
     },
+    subscriptionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'VipSubscription',
+      default: null,
+    },
+    planId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'VipPlan',
+      default: null,
+    },
+    vipClaims: [
+      {
+        subscriptionId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'VipSubscription',
+          required: true,
+        },
+        planId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'VipPlan',
+          required: true,
+        },
+        coinsAwarded: { type: Number, required: true },
+        coinTransactionId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'CoinTransaction',
+          default: null,
+        },
+        claimedAt: { type: Date, default: Date.now },
+      },
+    ],
     claimedAt: { type: Date, default: Date.now },
   },
   {

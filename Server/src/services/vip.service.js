@@ -6,9 +6,43 @@ import PaymentTransaction from '../models/PaymentOrder.js';
 import { PAYMENT_STATUS } from '../utils/constants.js';
 import MonetizationController from '../engines/MonetizationController.js';
 import { COIN_TX_TYPES } from '../utils/constants.js';
-import logger from '../utils/logger.js';
 import { getTodayIST, getStartOfTomorrowIST } from '../utils/timeIST.js';
+import { DateTime } from 'luxon';
 import DailyCheckin from '../models/DailyCheckin.js';
+
+const getSubId = (sub) => sub?._id?.toString?.() || String(sub?._id || '');
+const getPlanId = (plan) => plan?._id?.toString?.() || String(plan?._id || '');
+
+async function syncUserVipState(userId) {
+  const now = new Date();
+  const activeSubs = await VipSubscription.find({
+    userId,
+    status: 'active',
+    expiresAt: { $gt: now },
+  })
+    .populate('planId')
+    .sort({ expiresAt: -1, createdAt: -1 });
+
+  if (!activeSubs.length) {
+    await User.findByIdAndUpdate(userId, {
+      isVip: false,
+      vipExpiresAt: null,
+      vipFrameType: 'none',
+      vipBadgeType: 'none',
+    });
+    return null;
+  }
+
+  const primary = activeSubs[0];
+  const primaryPlan = primary.planId;
+  await User.findByIdAndUpdate(userId, {
+    isVip: true,
+    vipExpiresAt: primary.expiresAt,
+    vipFrameType: primaryPlan?.frameType || 'none',
+    vipBadgeType: primaryPlan?.badgeType || 'none',
+  });
+  return primary;
+}
 
 const vipService = {
   async getPlans() {
@@ -68,33 +102,6 @@ const vipService = {
     const plan = await VipPlan.findById(planId);
     if (!plan || !plan.isActive) throw new Error('Plan not found');
 
-    const now = new Date();
-    const existing = await VipSubscription.findOne({
-      userId,
-      status: 'active',
-      expiresAt: { $gt: now },
-    }).populate('planId');
-
-    if (existing) {
-      const oldPlan = existing.planId;
-      const dailyRate = oldPlan?.dailyCheckinCoins ?? 0;
-      const unclaimedDays = Math.max(
-        0,
-        (existing.totalDays - 1) - (existing.dailyCheckinsClaimed || 0)
-      );
-      const unclaimedValue = unclaimedDays * dailyRate;
-      await VipSubscription.findByIdAndUpdate(existing._id, {
-        status: 'replaced',
-        replacedAt: now,
-        unclaimedCoinsForfeited: unclaimedValue,
-      });
-      logger.info({
-        userId,
-        forfeited: unclaimedValue,
-        oldSubId: existing._id,
-      }, 'VIP subscription replaced');
-    }
-
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + plan.durationDays);
 
@@ -119,12 +126,7 @@ const vipService = {
       );
     }
 
-    await User.findByIdAndUpdate(userId, {
-      isVip: true,
-      vipExpiresAt: expiresAt,
-      vipFrameType: plan.frameType || 'none',
-      vipBadgeType: plan.badgeType || 'none',
-    });
+    await syncUserVipState(userId);
 
     return sub;
   },
@@ -136,16 +138,14 @@ const vipService = {
       expiresAt: { $lt: now },
     });
 
+    const affectedUserIds = new Set();
     for (const sub of expired) {
       sub.status = 'expired';
       await sub.save();
-
-      await User.findByIdAndUpdate(sub.userId, {
-        isVip: false,
-        vipExpiresAt: null,
-        vipFrameType: 'none',
-        vipBadgeType: 'none',
-      });
+      affectedUserIds.add(String(sub.userId));
+    }
+    for (const uid of affectedUserIds) {
+      await syncUserVipState(uid);
     }
 
     return { expiredCount: expired.length };
@@ -163,15 +163,18 @@ const vipService = {
       .select('isVip vipExpiresAt vipFrameType vipBadgeType coinBalance')
       .lean();
 
-    const sub = await VipSubscription.findOne({
+    const activeSubs = await VipSubscription.find({
       userId,
       status: 'active',
       expiresAt: { $gt: now },
-    }).populate('planId').lean();
+    })
+      .populate('planId')
+      .sort({ expiresAt: -1, createdAt: -1 })
+      .lean();
 
     const claimedToday = await DailyCheckin.findOne({ userId, date: today }).lean();
 
-    if (!sub || !sub.planId) {
+    if (!activeSubs.length) {
       return {
         isVip: false,
         coinBalance: user?.coinBalance ?? 0,
@@ -182,39 +185,87 @@ const vipService = {
         checkinCoins: null,
         nextCheckinAt: claimedToday ? getStartOfTomorrowIST() : null,
         progress: null,
+        subscriptions: [],
+        plansProgress: [],
       };
     }
 
-    const plan = sub.planId;
-    const remainingCheckins = (sub.totalDays - 1) - (sub.dailyCheckinsClaimed || 0);
-    const checkinCoins = plan.dailyCheckinCoins || 0;
-    const canVipCheckin = remainingCheckins > 0;
-    const checkinAvailableToday = !claimedToday && canVipCheckin;
-
-    const daysRemaining = Math.max(
-      0,
-      Math.ceil((new Date(sub.expiresAt) - now) / 86400000)
+    const claimedVipIds = new Set(
+      Array.isArray(claimedToday?.vipClaims)
+        ? claimedToday.vipClaims.map((entry) => String(entry?.subscriptionId))
+        : []
     );
+    const legacyClaimedVipSubId =
+      claimedToday?.source === 'vip_plan' && claimedToday?.subscriptionId
+        ? String(claimedToday.subscriptionId)
+        : null;
+    if (legacyClaimedVipSubId) claimedVipIds.add(legacyClaimedVipSubId);
+
+    const plansProgress = activeSubs
+      .filter((sub) => sub?.planId)
+      .map((sub) => {
+        const plan = sub.planId;
+        const claimedDays = sub.dailyCheckinsClaimed || 0;
+        const remainingCheckins = Math.max(0, sub.totalDays - claimedDays);
+        const checkinCoins = plan.dailyCheckinCoins || 0;
+        const daysRemaining = Math.max(
+          0,
+          Math.ceil((new Date(sub.expiresAt) - now) / 86400000)
+        );
+        const startedAtIST = DateTime.fromJSDate(new Date(sub.createdAt || now), { zone: 'utc' }).setZone('Asia/Kolkata');
+        const todayIST = DateTime.now().setZone('Asia/Kolkata').startOf('day');
+        const elapsedDays = Math.max(1, Math.floor(todayIST.diff(startedAtIST.startOf('day'), 'days').days) + 1);
+        const unlockedDays = Math.min(sub.totalDays, elapsedDays);
+        const canClaimToday = remainingCheckins > 0 && claimedDays < unlockedDays && !claimedVipIds.has(getSubId(sub));
+
+        return {
+          subscriptionId: getSubId(sub),
+          planId: getPlanId(plan),
+          plan: {
+            _id: getPlanId(plan),
+            name: plan.name,
+            type: plan.type,
+          },
+          planName: plan.name,
+          planSlug: plan.type,
+          status: sub.status,
+          expiresAt: sub.expiresAt,
+          daysRemaining,
+          checkinCoins,
+          canClaimToday,
+          nextCheckinAt: canClaimToday ? null : getStartOfTomorrowIST(),
+          progress: {
+            daysClaimed: claimedDays,
+            unlockedDays,
+            totalDays: sub.totalDays,
+            remainingCheckins,
+            remainingCoinsToCollect: Math.max(0, remainingCheckins * checkinCoins),
+          },
+        };
+      });
+
+    const primary = plansProgress[0];
+    const hasAnyClaimableToday = plansProgress.some((entry) => entry.canClaimToday);
 
     return {
       isVip: true,
       coinBalance: user?.coinBalance ?? 0,
       justExpired: false,
-      planSlug: plan.type,
-      planName: plan.name,
-      frameType: user?.vipFrameType || plan.frameType || 'none',
-      badgeType: user?.vipBadgeType || plan.badgeType || 'none',
-      expiresAt: sub.expiresAt,
-      daysRemaining,
-      checkinAvailableToday,
-      checkinCoins: canVipCheckin ? checkinCoins : 0,
-      nextCheckinAt: claimedToday ? getStartOfTomorrowIST() : null,
-      progress: {
-        daysClaimed: (sub.dailyCheckinsClaimed || 0) + 1,
-        totalDays: sub.totalDays,
-        remainingCheckins,
-        remainingCoinsToCollect: Math.max(0, remainingCheckins * checkinCoins),
-      },
+      planId: primary?.planId || null,
+      subscriptionId: primary?.subscriptionId || null,
+      plan: primary?.plan || null,
+      planSlug: primary?.planSlug || null,
+      planName: primary?.planName || null,
+      frameType: user?.vipFrameType || 'none',
+      badgeType: user?.vipBadgeType || 'none',
+      expiresAt: primary?.expiresAt || null,
+      daysRemaining: primary?.daysRemaining || 0,
+      checkinAvailableToday: hasAnyClaimableToday,
+      checkinCoins: primary?.checkinCoins || 0,
+      nextCheckinAt: hasAnyClaimableToday ? null : getStartOfTomorrowIST(),
+      progress: primary?.progress || null,
+      plansProgress,
+      subscriptions: plansProgress,
     };
   },
 };

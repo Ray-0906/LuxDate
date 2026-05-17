@@ -42,7 +42,7 @@ export const coinsApi = {
   transactions: (params) => api.get('/coins/transactions', { params }),
   packs: (params) => api.get('/coins/packs', { params }),
   checkinStatus: () => api.get('/coins/checkin/status'),
-  checkinClaim: () => api.post('/coins/checkin'),
+  checkinClaim: (payload = {}) => api.post('/coins/checkin', payload),
 };
 
 export const vipApi = {

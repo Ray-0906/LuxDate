@@ -122,7 +122,7 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {checkinInfo?.canClaim ? (
+        {!user?.isVip && checkinInfo?.canClaim ? (
           <View style={styles.checkinCard}>
             <Text style={styles.checkinTitle}>Daily check-in</Text>
             <Text style={styles.checkinSub}>
