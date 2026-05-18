@@ -12,6 +12,16 @@ import DailyCheckin from '../models/DailyCheckin.js';
 
 const getSubId = (sub) => sub?._id?.toString?.() || String(sub?._id || '');
 const getPlanId = (plan) => plan?._id?.toString?.() || String(plan?._id || '');
+const normalizeClaimedDayNumbers = (sub) => {
+  const claimed = Array.isArray(sub?.claimedDayNumbers)
+    ? sub.claimedDayNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n > 0)
+    : [];
+  if (claimed.length) {
+    return [...new Set(claimed)].sort((a, b) => a - b);
+  }
+  const legacyCount = Math.max(0, Number(sub?.dailyCheckinsClaimed) || 0);
+  return Array.from({ length: legacyCount }, (_, idx) => idx + 1);
+};
 
 async function syncUserVipState(userId) {
   const now = new Date();
@@ -190,22 +200,12 @@ const vipService = {
       };
     }
 
-    const claimedVipIds = new Set(
-      Array.isArray(claimedToday?.vipClaims)
-        ? claimedToday.vipClaims.map((entry) => String(entry?.subscriptionId))
-        : []
-    );
-    const legacyClaimedVipSubId =
-      claimedToday?.source === 'vip_plan' && claimedToday?.subscriptionId
-        ? String(claimedToday.subscriptionId)
-        : null;
-    if (legacyClaimedVipSubId) claimedVipIds.add(legacyClaimedVipSubId);
-
     const plansProgress = activeSubs
       .filter((sub) => sub?.planId)
       .map((sub) => {
         const plan = sub.planId;
-        const claimedDays = sub.dailyCheckinsClaimed || 0;
+        const claimedDayNumbers = normalizeClaimedDayNumbers(sub).filter((day) => day <= sub.totalDays);
+        const claimedDays = claimedDayNumbers.length;
         const remainingCheckins = Math.max(0, sub.totalDays - claimedDays);
         const checkinCoins = plan.dailyCheckinCoins || 0;
         const daysRemaining = Math.max(
@@ -216,7 +216,11 @@ const vipService = {
         const todayIST = DateTime.now().setZone('Asia/Kolkata').startOf('day');
         const elapsedDays = Math.max(1, Math.floor(todayIST.diff(startedAtIST.startOf('day'), 'days').days) + 1);
         const unlockedDays = Math.min(sub.totalDays, elapsedDays);
-        const canClaimToday = remainingCheckins > 0 && claimedDays < unlockedDays && !claimedVipIds.has(getSubId(sub));
+        const unlockedUnclaimedDays = [];
+        for (let day = 1; day <= unlockedDays; day += 1) {
+          if (!claimedDayNumbers.includes(day)) unlockedUnclaimedDays.push(day);
+        }
+        const canClaimNow = unlockedUnclaimedDays.length > 0;
 
         return {
           subscriptionId: getSubId(sub),
@@ -232,11 +236,14 @@ const vipService = {
           expiresAt: sub.expiresAt,
           daysRemaining,
           checkinCoins,
-          canClaimToday,
-          nextCheckinAt: canClaimToday ? null : getStartOfTomorrowIST(),
+          canClaimNow,
+          canClaimToday: canClaimNow,
+          nextCheckinAt: canClaimNow ? null : (remainingCheckins > 0 ? getStartOfTomorrowIST() : null),
           progress: {
             daysClaimed: claimedDays,
+            claimedDayNumbers,
             unlockedDays,
+            unlockedUnclaimedDays,
             totalDays: sub.totalDays,
             remainingCheckins,
             remainingCoinsToCollect: Math.max(0, remainingCheckins * checkinCoins),
@@ -245,7 +252,7 @@ const vipService = {
       });
 
     const primary = plansProgress[0];
-    const hasAnyClaimableToday = plansProgress.some((entry) => entry.canClaimToday);
+    const hasAnyClaimableNow = plansProgress.some((entry) => entry.canClaimNow);
 
     return {
       isVip: true,
@@ -260,9 +267,10 @@ const vipService = {
       badgeType: user?.vipBadgeType || 'none',
       expiresAt: primary?.expiresAt || null,
       daysRemaining: primary?.daysRemaining || 0,
-      checkinAvailableToday: hasAnyClaimableToday,
+      checkinAvailableToday: hasAnyClaimableNow,
+      checkinAvailableNow: hasAnyClaimableNow,
       checkinCoins: primary?.checkinCoins || 0,
-      nextCheckinAt: hasAnyClaimableToday ? null : getStartOfTomorrowIST(),
+      nextCheckinAt: hasAnyClaimableNow ? null : getStartOfTomorrowIST(),
       progress: primary?.progress || null,
       plansProgress,
       subscriptions: plansProgress,

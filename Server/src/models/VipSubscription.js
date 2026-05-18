@@ -9,6 +9,7 @@ const vipSubscriptionSchema = new mongoose.Schema(
     upfrontCoinsGranted: { type: Boolean, default: false },
     totalDays: { type: Number, required: true },
     dailyCheckinsClaimed: { type: Number, default: 0 },
+    claimedDayNumbers: [{ type: Number }],
     status: {
       type: String,
       enum: ['active', 'expired', 'replaced'],

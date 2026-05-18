@@ -253,13 +253,13 @@ export default function VIPPlansScreen({ navigation }) {
 
   const onGatewayCancel = () => setGwPick({ visible: false, plan: null, gateways: [] });
 
-  const handleClaimReward = async (planProgress) => {
+  const handleClaimReward = async (planProgress, dayNumber) => {
     if (!planProgress?.subscriptionId) {
       Alert.alert('VIP', 'This plan is not purchased yet.');
       return;
     }
-    if (!planProgress?.canClaimToday) {
-      Alert.alert('VIP', 'Today reward is already claimed for this plan.');
+    if (!Number.isInteger(dayNumber) || dayNumber < 1) {
+      Alert.alert('VIP', 'Invalid day selected.');
       return;
     }
     setClaimingSubscriptionId(planProgress.subscriptionId);
@@ -267,6 +267,7 @@ export default function VIPPlansScreen({ navigation }) {
       const res = await coinsApi.checkinClaim({
         subscriptionId: planProgress.subscriptionId,
         planId: planProgress.planId,
+        dayNumber,
       });
       const data = res?.data?.data || {};
       if (!data?.success) {
@@ -437,13 +438,14 @@ export default function VIPPlansScreen({ navigation }) {
                  {plan.dailyRewards.map((dayReward, index) => {
                    const planProgress = resolvePlanProgress(plan.id);
                    const isPlanPurchased = !!planProgress;
-                   const claimedDays = isPlanPurchased ? planProgress?.progress?.daysClaimed || 0 : 0;
-                   const unlockedDays = isPlanPurchased
-                     ? Math.max(claimedDays, planProgress?.progress?.unlockedDays || 0)
-                     : 0;
-                   const isClaimed = index < claimedDays;
-                   const isUnlocked = isPlanPurchased && index < unlockedDays;
-                   const isTodayClaimable = isUnlocked && index === claimedDays && !!planProgress?.canClaimToday;
+                   const unlockedDays = isPlanPurchased ? planProgress?.progress?.unlockedDays || 0 : 0;
+                   const claimedDayNumbers = Array.isArray(planProgress?.progress?.claimedDayNumbers)
+                     ? planProgress.progress.claimedDayNumbers
+                     : [];
+                   const dayNumber = Number(dayReward?.day || index + 1);
+                   const isClaimed = claimedDayNumbers.includes(dayNumber);
+                   const isUnlocked = isPlanPurchased && dayNumber <= unlockedDays;
+                   const isTodayClaimable = isUnlocked && !isClaimed;
                    const isLocked = !isClaimed && !isUnlocked;
                    const canPressClaim =
                      isTodayClaimable &&
@@ -472,12 +474,8 @@ export default function VIPPlansScreen({ navigation }) {
                          Alert.alert('VIP', 'This day is not unlocked yet.');
                          return;
                        }
-                       if (!planProgress?.canClaimToday) {
-                         Alert.alert('VIP', 'Today reward for this plan is already claimed.');
-                         return;
-                       }
                        if (!canPressClaim) return;
-                       handleClaimReward(planProgress);
+                       handleClaimReward(planProgress, dayNumber);
                      }}
                    >
                      {isClaimed && (

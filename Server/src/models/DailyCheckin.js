@@ -37,6 +37,7 @@ const dailyCheckinSchema = new mongoose.Schema(
           ref: 'VipPlan',
           required: true,
         },
+        dayNumber: { type: Number, required: false },
         coinsAwarded: { type: Number, required: true },
         coinTransactionId: {
           type: mongoose.Schema.Types.ObjectId,
