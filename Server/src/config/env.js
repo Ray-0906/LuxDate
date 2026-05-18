@@ -16,6 +16,8 @@ const explicitPaymentMockOff = paymentMockEnv === 'false';
 const devAutoPaymentMock =
   !explicitPaymentMockOff && nodeEnv === 'development' && !razorpayKeyIdTrimmed;
 const paymentMockAllowProd = process.env.PAYMENT_MOCK_ALLOW_PROD === 'true';
+const mongoTransactionsEnv = (process.env.MONGO_USE_TRANSACTIONS || '').trim().toLowerCase();
+const mongoTransactionsEnabled = mongoTransactionsEnv === 'false' ? false : true;
 /** True when mock gateway should be used for new orders (see seedDefaultGateway). */
 const paymentMockEnabled = isProd
   ? explicitPaymentMock && paymentMockAllowProd
@@ -32,6 +34,7 @@ const env = {
 
   // MongoDB
   mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/luxdate',
+  mongoTransactionsEnabled,
 
   // JWT
   jwt: {

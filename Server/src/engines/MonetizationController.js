@@ -6,9 +6,22 @@ import mongoose from 'mongoose';
 import { COIN_TX_TYPES } from '../utils/constants.js';
 import { getTodayIST, getStartOfTomorrowIST } from '../utils/timeIST.js';
 import appSettingService from '../services/appSetting.service.js';
+import env from '../config/env.js';
 import logger from '../utils/logger.js';
 
 const toIdString = (value) => (value?._id ? String(value._id) : String(value || ''));
+const maybeSession = (query, session) => (session ? query.session(session) : query);
+const saveWithOptionalSession = (doc, session) => (session ? doc.save({ session }) : doc.save());
+
+const isTransactionSupportError = (error) => {
+  const msg = typeof error?.message === 'string' ? error.message : '';
+  return (
+    msg.includes('Transaction numbers are only allowed on a replica set member or mongos')
+    || msg.includes('Transaction support is not available')
+    || msg.includes('transactions are not supported')
+    || msg.includes('Transaction API error')
+  );
+};
 
 function extractVipClaimsFromRow(row) {
   const claims = Array.isArray(row?.vipClaims) ? [...row.vipClaims] : [];
@@ -183,201 +196,220 @@ const MonetizationController = {
   },
 
   async claimDailyCheckin(userId, context = {}) {
-    const today = getTodayIST();
-    const now = new Date();
-    const requestedSubscriptionId = context?.subscriptionId || null;
-    const requestedPlanId = context?.planId || null;
+    const runClaimFlow = async ({ session = null } = {}) => {
+      const today = getTodayIST();
+      const now = new Date();
+      const requestedSubscriptionId = context?.subscriptionId || null;
+      const requestedPlanId = context?.planId || null;
 
-    const session = await mongoose.startSession();
-    try {
-      let payload = null;
-      await session.withTransaction(async () => {
-        const activeSubs = await VipSubscription.find({
+      const activeSubs = await maybeSession(
+        VipSubscription.find({
           userId,
           status: 'active',
           expiresAt: { $gt: now },
-        })
-          .populate('planId')
-          .session(session);
+        }).populate('planId'),
+        session
+      );
 
-        let targetSub = null;
-        if (requestedSubscriptionId) {
-          targetSub = activeSubs.find((sub) => String(sub._id) === String(requestedSubscriptionId));
-          if (!targetSub) {
-            payload = {
-              success: false,
-              error: 'invalid_subscription',
-              message: 'Selected VIP subscription is not active',
-            };
-            return;
-          }
-        } else if (requestedPlanId) {
-          targetSub = activeSubs.find((sub) => String(sub.planId?._id) === String(requestedPlanId));
-          if (!targetSub) {
-            payload = {
-              success: false,
-              error: 'invalid_plan_subscription',
-              message: 'No active VIP subscription found for selected plan',
-            };
-            return;
-          }
-        } else if (activeSubs.length === 1) {
-          // backward compatibility for old clients
-          targetSub = activeSubs[0];
-        } else if (activeSubs.length > 1) {
-          payload = {
+      let targetSub = null;
+      if (requestedSubscriptionId) {
+        targetSub = activeSubs.find((sub) => String(sub._id) === String(requestedSubscriptionId));
+        if (!targetSub) {
+          return {
             success: false,
-            error: 'subscription_required',
-            message: 'Please select a VIP plan to claim daily reward',
+            error: 'invalid_subscription',
+            message: 'Selected VIP subscription is not active',
           };
-          return;
+        }
+      } else if (requestedPlanId) {
+        targetSub = activeSubs.find((sub) => String(sub.planId?._id) === String(requestedPlanId));
+        if (!targetSub) {
+          return {
+            success: false,
+            error: 'invalid_plan_subscription',
+            message: 'No active VIP subscription found for selected plan',
+          };
+        }
+      } else if (activeSubs.length === 1) {
+        // backward compatibility for old clients
+        targetSub = activeSubs[0];
+      } else if (activeSubs.length > 1) {
+        return {
+          success: false,
+          error: 'subscription_required',
+          message: 'Please select a VIP plan to claim daily reward',
+        };
+      }
+
+      const todayRecord = await maybeSession(DailyCheckin.findOne({ userId, date: today }), session);
+      if (targetSub) {
+        const plan = targetSub.planId;
+        const claimedDays = targetSub.dailyCheckinsClaimed || 0;
+        const elapsedDays = Math.max(
+          1,
+          Math.floor((new Date(now).setHours(0, 0, 0, 0) - new Date(targetSub.createdAt || now).setHours(0, 0, 0, 0)) / 86400000) + 1
+        );
+        const unlockedDays = Math.min(targetSub.totalDays, elapsedDays);
+        const remainingCheckins = Math.max(0, targetSub.totalDays - claimedDays);
+        if (remainingCheckins <= 0 || claimedDays >= unlockedDays) {
+          return {
+            success: false,
+            error: 'checkin_not_unlocked',
+            message: 'This VIP day reward is not unlocked yet',
+          };
         }
 
-        const todayRecord = await DailyCheckin.findOne({ userId, date: today }).session(session);
-        if (targetSub) {
-          const plan = targetSub.planId;
-          const claimedDays = targetSub.dailyCheckinsClaimed || 0;
-          const elapsedDays = Math.max(
-            1,
-            Math.floor((new Date(now).setHours(0, 0, 0, 0) - new Date(targetSub.createdAt || now).setHours(0, 0, 0, 0)) / 86400000) + 1
-          );
-          const unlockedDays = Math.min(targetSub.totalDays, elapsedDays);
-          const remainingCheckins = Math.max(0, targetSub.totalDays - claimedDays);
-          if (remainingCheckins <= 0 || claimedDays >= unlockedDays) {
-            payload = {
-              success: false,
-              error: 'checkin_not_unlocked',
-              message: 'This VIP day reward is not unlocked yet',
-            };
-            return;
-          }
-
-          const claimedVip = extractVipClaimsFromRow(todayRecord).some(
-            (entry) => String(entry.subscriptionId) === String(targetSub._id)
-          );
-          if (claimedVip) {
-            payload = {
-              success: false,
-              error: 'already_claimed_today',
-              message: 'Already claimed today for this plan',
-              nextCheckinAt: getStartOfTomorrowIST(),
-            };
-            return;
-          }
-
-          const referenceId = `vip:${String(targetSub._id)}:${today}`;
-          const coinsToAward = plan?.dailyCheckinCoins || 0;
-          const grant = await this.grantCoins(
-            userId,
-            coinsToAward,
-            COIN_TX_TYPES.CHECKIN,
-            referenceId,
-            `VIP daily check-in (${plan?.name || 'plan'})`,
-            { session, idempotent: true }
-          );
-
-          let dayDoc = todayRecord;
-          if (!dayDoc) {
-            dayDoc = await DailyCheckin.findOneAndUpdate(
-              { userId, date: today },
-              {
-                $setOnInsert: {
-                  userId,
-                  date: today,
-                  source: 'vip_plan',
-                  coinsAwarded: coinsToAward,
-                },
-              },
-              { new: true, upsert: true, session }
-            );
-          }
-
-          dayDoc.source = dayDoc.source || 'vip_plan';
-          dayDoc.vipClaims = extractVipClaimsFromRow(dayDoc);
-          dayDoc.vipClaims.push({
-            subscriptionId: targetSub._id,
-            planId: plan?._id,
-            coinsAwarded: coinsToAward,
-            coinTransactionId: grant.coinTransactionId,
-            claimedAt: new Date(),
-          });
-          // Keep legacy fields present for backward compatibility with existing analytics.
-          if (!dayDoc.subscriptionId) dayDoc.subscriptionId = targetSub._id;
-          if (!dayDoc.planId) dayDoc.planId = plan?._id || null;
-          if (dayDoc.coinsAwarded == null) dayDoc.coinsAwarded = coinsToAward;
-          await dayDoc.save({ session });
-
-          targetSub.dailyCheckinsClaimed = claimedDays + 1;
-          await targetSub.save({ session });
-
-          payload = {
-            success: true,
-            coins: coinsToAward,
-            source: 'vip_plan',
-            subscriptionId: String(targetSub._id),
-            planId: String(plan?._id || ''),
-            newBalance: grant.coinBalance,
-            alreadyClaimed: false,
-          };
-          return;
-        }
-
-        // Free login check-in (no VIP sub selected/active)
-        if (todayRecord?.source === 'free_login') {
-          payload = {
+        const claimedVip = extractVipClaimsFromRow(todayRecord).some(
+          (entry) => String(entry.subscriptionId) === String(targetSub._id)
+        );
+        if (claimedVip) {
+          return {
             success: false,
             error: 'already_claimed_today',
-            message: 'Already claimed today',
+            message: 'Already claimed today for this plan',
             nextCheckinAt: getStartOfTomorrowIST(),
           };
-          return;
         }
 
-        const coinsToAward = await this.getFreeCheckinCoins();
-        const dayDoc = await DailyCheckin.findOneAndUpdate(
-          { userId, date: today },
-          {
-            $setOnInsert: {
-              userId,
-              date: today,
-              source: 'free_login',
-              coinsAwarded: coinsToAward,
-            },
-          },
-          { new: true, upsert: true, session }
-        );
-        dayDoc.source = 'free_login';
-        dayDoc.coinsAwarded = coinsToAward;
-        dayDoc.subscriptionId = null;
-        dayDoc.planId = null;
-
-        const referenceId = `free:${userId}:${today}`;
+        const referenceId = `vip:${String(targetSub._id)}:${today}`;
+        const coinsToAward = plan?.dailyCheckinCoins || 0;
         const grant = await this.grantCoins(
           userId,
           coinsToAward,
           COIN_TX_TYPES.CHECKIN,
           referenceId,
-          'Daily check-in (free login)',
+          `VIP daily check-in (${plan?.name || 'plan'})`,
           { session, idempotent: true }
         );
-        dayDoc.coinTransactionId = grant.coinTransactionId;
-        await dayDoc.save({ session });
 
-        payload = {
+        let dayDoc = todayRecord;
+        if (!dayDoc) {
+          const query = DailyCheckin.findOneAndUpdate(
+            { userId, date: today },
+            {
+              $setOnInsert: {
+                userId,
+                date: today,
+                source: 'vip_plan',
+                coinsAwarded: coinsToAward,
+              },
+            },
+            session ? { new: true, upsert: true, session } : { new: true, upsert: true }
+          );
+          dayDoc = await query;
+        }
+
+        dayDoc.source = dayDoc.source || 'vip_plan';
+        dayDoc.vipClaims = extractVipClaimsFromRow(dayDoc);
+        dayDoc.vipClaims.push({
+          subscriptionId: targetSub._id,
+          planId: plan?._id,
+          coinsAwarded: coinsToAward,
+          coinTransactionId: grant.coinTransactionId,
+          claimedAt: new Date(),
+        });
+        // Keep legacy fields present for backward compatibility with existing analytics.
+        if (!dayDoc.subscriptionId) dayDoc.subscriptionId = targetSub._id;
+        if (!dayDoc.planId) dayDoc.planId = plan?._id || null;
+        if (dayDoc.coinsAwarded == null) dayDoc.coinsAwarded = coinsToAward;
+        await saveWithOptionalSession(dayDoc, session);
+
+        targetSub.dailyCheckinsClaimed = claimedDays + 1;
+        await saveWithOptionalSession(targetSub, session);
+
+        return {
           success: true,
           coins: coinsToAward,
-          source: 'free_login',
+          source: 'vip_plan',
+          subscriptionId: String(targetSub._id),
+          planId: String(plan?._id || ''),
           newBalance: grant.coinBalance,
           alreadyClaimed: false,
         };
-      });
+      }
 
+      // Free login check-in (no VIP sub selected/active)
+      if (todayRecord?.source === 'free_login') {
+        return {
+          success: false,
+          error: 'already_claimed_today',
+          message: 'Already claimed today',
+          nextCheckinAt: getStartOfTomorrowIST(),
+        };
+      }
+
+      const coinsToAward = await this.getFreeCheckinCoins();
+      const dayDoc = await DailyCheckin.findOneAndUpdate(
+        { userId, date: today },
+        {
+          $setOnInsert: {
+            userId,
+            date: today,
+            source: 'free_login',
+            coinsAwarded: coinsToAward,
+          },
+        },
+        session ? { new: true, upsert: true, session } : { new: true, upsert: true }
+      );
+      dayDoc.source = 'free_login';
+      dayDoc.coinsAwarded = coinsToAward;
+      dayDoc.subscriptionId = null;
+      dayDoc.planId = null;
+
+      const referenceId = `free:${userId}:${today}`;
+      const grant = await this.grantCoins(
+        userId,
+        coinsToAward,
+        COIN_TX_TYPES.CHECKIN,
+        referenceId,
+        'Daily check-in (free login)',
+        { session, idempotent: true }
+      );
+      dayDoc.coinTransactionId = grant.coinTransactionId;
+      await saveWithOptionalSession(dayDoc, session);
+
+      return {
+        success: true,
+        coins: coinsToAward,
+        source: 'free_login',
+        newBalance: grant.coinBalance,
+        alreadyClaimed: false,
+      };
+    };
+
+    if (!env.mongoTransactionsEnabled) {
+      return runClaimFlow({ session: null });
+    }
+
+    let session = null;
+    try {
+      session = await mongoose.startSession();
+      let payload = null;
+      await session.withTransaction(async () => {
+        payload = await runClaimFlow({ session });
+      });
       return payload;
     } catch (error) {
+      if (isTransactionSupportError(error)) {
+        logger.warn({ err: error, userId }, 'Check-in falling back to non-transaction mode');
+        try {
+          return await runClaimFlow({ session: null });
+        } catch (fallbackError) {
+          logger.error({ err: fallbackError, userId }, 'Check-in fallback flow failed');
+          return {
+            success: false,
+            error: 'checkin_temporarily_unavailable',
+            message: 'Check-in is temporarily unavailable. Please try again.',
+            nextCheckinAt: getStartOfTomorrowIST(),
+          };
+        }
+      }
       logger.error({ err: error, userId }, 'Daily check-in claim failed');
       throw error;
     } finally {
-      await session.endSession();
+      if (session) {
+        await session.endSession();
+      }
     }
   },
 
