@@ -8,11 +8,16 @@ import BackgroundFetch from 'react-native-background-fetch';
 import App from './App';
 import { name as appName } from './app.json';
 import MessageTriggerEngine from './src/engines/MessageTriggerEngine';
+import RelationshipEngine from './src/engines/RelationshipEngine';
 
 // Handle background notification clicks (e.g., when the app is completely closed)
 notifee.onBackgroundEvent(async ({ type, detail }) => {
   if (type === EventType.DELIVERED) {
     await MessageTriggerEngine.handleDeliveredPrefetchNotification(detail.notification);
+    return;
+  }
+  if (type === EventType.PRESS || type === EventType.ACTION_PRESS) {
+    RelationshipEngine.cacheBackgroundPress(detail.notification);
   }
 });
 

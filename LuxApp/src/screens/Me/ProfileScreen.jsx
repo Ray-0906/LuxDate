@@ -7,7 +7,8 @@ import { useFocusEffect, useRoute } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import theme from '../../theme/theme.js';
 import useAuthStore from '../../store/authStore.js';
-import { vipApi, coinsApi } from '../../api/services.js';
+import { vipApi, coinsApi, relationshipsApi } from '../../api/services.js';
+import RelationshipEngine from '../../engines/RelationshipEngine.js';
 
 const WEALTH_COLORS = ['#666', '#8B8B8B', '#B8860B', '#FFD700', '#FF6347', '#FF2D78', '#8B2FF8'];
 
@@ -26,6 +27,7 @@ export default function ProfileScreen({ navigation }) {
 
   const [checkinInfo, setCheckinInfo] = useState(null);
   const [postNudge, setPostNudge] = useState(null);
+  const [myConnections, setMyConnections] = useState([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -37,6 +39,9 @@ export default function ProfileScreen({ navigation }) {
           Alert.alert('VIP expired', 'Renew from VIP Plans to keep daily rewards.');
         }
       }).catch(() => {});
+      relationshipsApi.my()
+        .then((r) => setMyConnections(r.data?.data?.slots || []))
+        .catch(() => setMyConnections([]));
       const p = route.params?.postCallTopUp;
       if (p) {
         setPostNudge(p);
@@ -75,6 +80,32 @@ export default function ProfileScreen({ navigation }) {
     } catch (e) {
       Alert.alert('Check-in', e?.response?.data?.message || e.message || 'Failed');
     }
+  };
+
+  const handleBreakBond = async (slot) => {
+    const rel = slot?.relationship;
+    if (!rel?._id) return;
+    Alert.alert(
+      'End this bond?',
+      'This cannot be undone and coins are not refunded.',
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'End Bond',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await relationshipsApi.break(rel._id, { reason: 'manual_break' });
+              RelationshipEngine.cancelPendingAcceptance(rel._id);
+              const res = await relationshipsApi.my();
+              setMyConnections(res.data?.data?.slots || []);
+            } catch (e) {
+              Alert.alert('Relationship', e?.response?.data?.message || 'Unable to end bond');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -160,6 +191,67 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.vipText}>VIP Active</Text>
           </View>
         ) : null}
+
+        <View style={styles.connectionsCard}>
+          <Text style={styles.connectionsTitle}>My Connections</Text>
+          <View style={styles.connectionCardGrid}>
+            {myConnections.map((slot) => {
+              const rel = slot.relationship;
+              const isActive = slot.state === 'accepted' || slot.state === 'pending';
+              const girlPhoto = rel?.girl?.photo || '';
+              return (
+                <Pressable
+                  key={slot.type}
+                  style={styles.connectionCard}
+                  onPress={() => {
+                    if (isActive && rel?.girlProfileId) {
+                      navigation.navigate('GirlProfile', {
+                        girl: {
+                          _id: rel.girlProfileId,
+                          name: rel?.girl?.name,
+                          photos: girlPhoto ? [girlPhoto] : [],
+                        },
+                      });
+                    } else {
+                      navigation.navigate('ForYou');
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (isActive) handleBreakBond(slot);
+                  }}
+                >
+                  <View style={styles.connectionCardMedia}>
+                    {isActive && girlPhoto ? (
+                      <Image source={{ uri: girlPhoto }} style={styles.connectionCardPhoto} />
+                    ) : (
+                      <View style={styles.connectionCardPlaceholder}>
+                        <Ionicons
+                          name={slot.state === 'pending' ? 'hourglass-outline' : 'person-add-outline'}
+                          size={22}
+                          color={theme.colors.textMuted}
+                        />
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.connectionCardTitle}>{slot.typeIcon} {slot.typeLabel}</Text>
+                  {isActive ? (
+                    <Text style={styles.connectionCardSub} numberOfLines={2}>
+                      {rel?.girl?.name || 'Connected'} · {slot.state === 'pending' ? 'Pending' : 'Active'}
+                    </Text>
+                  ) : (
+                    <Text style={styles.connectionCardSub}>Waiting for someone</Text>
+                  )}
+                  <Text style={styles.connectionCardHint}>
+                    {isActive ? 'Tap to open profile' : 'Tap to find connection'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {!!myConnections.length && (
+            <Text style={styles.connectionsFootnote}>Long press an active card to break bond.</Text>
+          )}
+        </View>
 
         <View style={styles.menu}>
           {menuItems.map((item) => (
@@ -259,6 +351,81 @@ const styles = StyleSheet.create({
     padding: 12, marginTop: 12, borderWidth: 1, borderColor: 'rgba(255,215,0,0.2)',
   },
   vipText: { fontSize: 14, fontWeight: '700', color: '#FFD700' },
+  connectionsCard: {
+    marginTop: 14,
+    backgroundColor: theme.colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+  },
+  connectionsTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary },
+  connectionCardGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  connectionCard: {
+    width: '31.5%',
+    backgroundColor: theme.colors.bgPrimary,
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
+    borderRadius: 12,
+    padding: 10,
+    minHeight: 165,
+  },
+  connectionCardMedia: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  connectionCardPhoto: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1.5,
+    borderColor: theme.colors.accentMagenta,
+  },
+  connectionCardPlaceholder: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: theme.colors.bgTertiary,
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectionCardTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+  },
+  connectionCardSub: {
+    marginTop: 6,
+    minHeight: 30,
+    fontSize: 11,
+    lineHeight: 15,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  connectionCardHint: {
+    marginTop: 6,
+    textAlign: 'center',
+    fontSize: 10,
+    fontWeight: '800',
+    color: theme.colors.accentCyan,
+  },
+  connectionsFootnote: {
+    marginTop: 4,
+    fontSize: 11,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
   menu: { marginTop: 20 },
   menuItem: {
     flexDirection: 'row', alignItems: 'center', gap: 14,

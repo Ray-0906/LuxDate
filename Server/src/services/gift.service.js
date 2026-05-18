@@ -6,6 +6,7 @@ import User from '../models/User.js';
 import CoinTransaction from '../models/CoinTransaction.js';
 import ChatMessage from '../models/Message.js';
 import ChatSession from '../models/Conversation.js';
+import Relationship from '../models/Relationship.js';
 import AutoReplyEngine from '../engines/AutoReplyEngine.js';
 import env from '../config/env.js';
 import logger from '../utils/logger.js';
@@ -46,6 +47,13 @@ const calculateWealthLevel = (totalSpent) => {
     }
   }
   return level;
+};
+
+const RELATIONSHIP_GIFT_COPY = {
+  soulmate: { icon: '💫', label: 'Soulmate' },
+  lover: { icon: '❤️', label: 'Lover' },
+  close_friend: { icon: '👫', label: 'Close Friend' },
+  best_friend: { icon: '👫', label: 'Close Friend' },
 };
 
 const maybeSession = (query, session) => (session ? query.session(session) : query);
@@ -156,6 +164,19 @@ const persistGiftSend = async ({
   const previousWealthLevel = user.wealthLevel || 0;
   const sentAt = new Date();
 
+  const relationship = await maybeSession(
+    Relationship.findOne({
+      userId,
+      girlProfileId: girlId,
+      status: { $in: ['accepted', 'active'] },
+    }).sort({ acceptedAt: -1, createdAt: -1 }),
+    session
+  );
+  const relationshipCopy = relationship ? RELATIONSHIP_GIFT_COPY[String(relationship.type || '').toLowerCase()] : null;
+  const relationshipGiftHeadline = relationshipCopy
+    ? `${relationshipCopy.icon} Your ${relationshipCopy.label} ${girl.name} received your ${gift.name} ${gift.emojiFallback || '🎁'}`
+    : '';
+
   user.coinBalance -= totalCost;
   user.totalCoinsEverSpent += totalCost;
   user.wealthLevel = calculateWealthLevel(user.totalCoinsEverSpent);
@@ -210,6 +231,8 @@ const persistGiftSend = async ({
       quantity,
       totalCoinsSpent: totalCost,
       sentDuringCallSessionId: callSessionId,
+      relationshipGiftHeadline,
+      relationshipGiftType: relationshipCopy ? relationshipCopy.label : '',
     },
     sentAt,
   }], session);

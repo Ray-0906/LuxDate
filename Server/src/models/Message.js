@@ -26,9 +26,17 @@ const chatMessageSchema = new mongoose.Schema(
       quantity: { type: Number, default: 1, min: 1 },
       totalCoinsSpent: { type: Number, default: 0, min: 0 },
       sentDuringCallSessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'CallSession', default: null },
+      relationshipGiftHeadline: { type: String, default: '' },
+      relationshipGiftType: { type: String, default: '' },
       callLog: {
         status: { type: String, default: null },
         durationSeconds: { type: Number, default: 0 },
+      },
+      relationshipEvent: {
+        eventType: { type: String, default: '' },
+        relationshipId: { type: mongoose.Schema.Types.ObjectId, ref: 'Relationship', default: null },
+        relationshipType: { type: String, default: '' },
+        quote: { type: String, default: '' },
       },
     },
     isRead: { type: Boolean, default: false },

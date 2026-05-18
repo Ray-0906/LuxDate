@@ -68,7 +68,10 @@ export const giftsApi = {
 
 export const relationshipsApi = {
   options: (girlId) => api.get(`/relationships/options/${girlId}`),
+  my: () => api.get('/relationships/my'),
   invite: (data) => api.post('/relationships/invite', data),
+  accept: (relationshipId) => api.post(`/relationships/${relationshipId}/accept`),
+  break: (relationshipId, data = {}) => api.post(`/relationships/${relationshipId}/break`, data),
 };
 
 export const userApi = {

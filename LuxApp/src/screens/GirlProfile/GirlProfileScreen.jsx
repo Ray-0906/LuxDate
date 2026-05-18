@@ -9,6 +9,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Modal,
+  Alert,
   TouchableOpacity,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
@@ -16,13 +17,15 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import theme from '../../theme/theme.js';
-import { profilesApi } from '../../api/services.js';
+import { profilesApi, relationshipsApi } from '../../api/services.js';
 import useProfileCallTrigger from '../../hooks/useProfileCallTrigger.js';
 import TriggerEngine from '../../engines/TriggerEngine.js';
+import RelationshipEngine from '../../engines/RelationshipEngine.js';
 import GiftPickerModal from '../../components/GiftPickerModal.jsx';
 import GiftBurstOverlay from '../../components/GiftBurstOverlay.jsx';
 import InsufficientCoinsModal from '../../components/InsufficientCoinsModal.jsx';
 import CoinPackSheet from '../../components/CoinPackSheet.jsx';
+import useAuthStore from '../../store/authStore.js';
 
 const { width: W } = Dimensions.get('window');
 
@@ -34,14 +37,20 @@ export default function GirlProfileScreen({ route, navigation }) {
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [loading, setLoading] = useState(!girlParam);
   const [showBioMore, setShowBioMore] = useState(false);
+  const [relationshipInfo, setRelationshipInfo] = useState({ slots: [], relationshipTypes: [] });
   const [activeRel, setActiveRel] = useState(null);
-  const [relationships, setRelationships] = useState({});
+  const [switchPrompt, setSwitchPrompt] = useState(null);
+  const [breakPrompt, setBreakPrompt] = useState(null);
+  const [relLoading, setRelLoading] = useState(false);
+  const [pendingInviteIntent, setPendingInviteIntent] = useState(null);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [showCoinsModal, setShowCoinsModal] = useState(false);
   const [showCoinPackSheet, setShowCoinPackSheet] = useState(false);
   const [coinsModalBalance, setCoinsModalBalance] = useState(0);
   const [coinsModalRequired, setCoinsModalRequired] = useState(0);
   const [giftBurst, setGiftBurst] = useState(null);
+  const user = useAuthStore((s) => s.user);
+  const loadProfile = useAuthStore((s) => s.loadProfile);
 
   useProfileCallTrigger(girl?._id, !!girl && isFocused);
 
@@ -57,6 +66,20 @@ export default function GirlProfileScreen({ route, navigation }) {
     }
   }, [girlParam]);
 
+  const loadRelationshipOptions = useCallback(async () => {
+    if (!girlParam?._id) return;
+    try {
+      const res = await relationshipsApi.options(girlParam._id);
+      const data = res.data?.data || {};
+      setRelationshipInfo({
+        slots: Array.isArray(data.slots) ? data.slots : [],
+        relationshipTypes: Array.isArray(data.relationshipTypes) ? data.relationshipTypes : [],
+      });
+    } catch {
+      setRelationshipInfo({ slots: [], relationshipTypes: [] });
+    }
+  }, [girlParam?._id]);
+
   useEffect(() => {
     if (isFocused) {
       TriggerEngine.setBlockedContext(false);
@@ -65,7 +88,8 @@ export default function GirlProfileScreen({ route, navigation }) {
 
   useEffect(() => {
     loadGirlProfile();
-  }, [loadGirlProfile]);
+    loadRelationshipOptions();
+  }, [loadGirlProfile, loadRelationshipOptions]);
 
   useEffect(() => {
     if (!giftBurst) return undefined;
@@ -90,12 +114,75 @@ export default function GirlProfileScreen({ route, navigation }) {
     }
   };
 
-  const confirmRelationship = () => {
-    if (activeRel) {
-      setRelationships((prev) => ({ ...prev, [activeRel]: true }));
-      setActiveRel(null);
+  const findSlotByType = useCallback((type) => (
+    relationshipInfo.slots.find((slot) => slot.type === type)
+  ), [relationshipInfo.slots]);
+
+  const openInviteForType = useCallback((slotType) => {
+    const slot = findSlotByType(slotType);
+    if (!slot) return;
+    if (slot.state === 'empty') {
+      setActiveRel(slot);
+      return;
     }
-  };
+    if (slot.state === 'occupied' && slot.occupiedBy) {
+      setSwitchPrompt({ targetSlot: slot, occupiedBy: slot.occupiedBy });
+      return;
+    }
+    if ((slot.state === 'pending' || slot.state === 'accepted') && slot.relationship) {
+      setBreakPrompt({ relationship: slot.relationship, source: 'slot' });
+    }
+  }, [findSlotByType]);
+
+  const refreshRelationshipUI = useCallback(async () => {
+    await Promise.all([loadGirlProfile(), loadRelationshipOptions(), loadProfile()]);
+  }, [loadGirlProfile, loadRelationshipOptions, loadProfile]);
+
+  const handleInvite = useCallback(async (slot) => {
+    if (!slot?.type || !girl?._id) return;
+    setRelLoading(true);
+    try {
+      const res = await relationshipsApi.invite({
+        girlId: girl._id,
+        type: slot.type,
+      });
+      const data = res.data?.data || {};
+      if (data?.relationship?._id) {
+        RelationshipEngine.schedulePendingAcceptance(data.relationship);
+      }
+      setActiveRel(null);
+      await refreshRelationshipUI();
+    } catch (error) {
+      const status = error?.response?.status;
+      const payload = error?.response?.data?.data || {};
+      if (status === 402) {
+        setPendingInviteIntent({ type: slot.type, girlId: girl._id });
+        setCoinsModalBalance(payload.coinBalance || user?.coinBalance || 0);
+        setCoinsModalRequired(payload.requiredCoins || slot.cost || 0);
+        setShowCoinsModal(true);
+      } else {
+        Alert.alert('Relationship', error?.response?.data?.message || 'Unable to send request');
+      }
+    } finally {
+      setRelLoading(false);
+    }
+  }, [girl?._id, refreshRelationshipUI, user?.coinBalance]);
+
+  const handleBreakRelationship = useCallback(async (relationship, reason = 'manual_break') => {
+    if (!relationship?._id) return false;
+    setRelLoading(true);
+    try {
+      await relationshipsApi.break(relationship._id, { reason });
+      RelationshipEngine.cancelPendingAcceptance(relationship._id);
+      await refreshRelationshipUI();
+      return true;
+    } catch (error) {
+      Alert.alert('Relationship', error?.response?.data?.message || 'Unable to end bond');
+      return false;
+    } finally {
+      setRelLoading(false);
+    }
+  }, [refreshRelationshipUI]);
 
   const renderGiftShowcase = () => {
     if (!girl.gifts?.length) {
@@ -184,23 +271,60 @@ export default function GirlProfileScreen({ route, navigation }) {
         <View style={styles.divider} />
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Close Friends</Text>
-          <View style={styles.relationsRow}>
-            {['Soulmate', 'Lover', 'Best Friend'].map((rel, idx) => {
-              const isFilled = relationships[rel];
+          <Text style={styles.sectionTitle}>Connections</Text>
+          <View style={styles.relationshipCardGrid}>
+            {relationshipInfo.slots.map((slot) => {
+              const state = slot.state;
+              const occupiedName = slot.occupiedBy?.girl?.name || '';
+              const isAccepted = state === 'accepted';
+              const isPending = state === 'pending';
+              const isEmpty = state === 'empty';
+              const cardPhoto = isAccepted ? (user?.profilePhotoUrl || '') : '';
+
               return (
-                <Pressable key={idx} style={styles.relationSlot} onPress={() => !isFilled && setActiveRel(rel)}>
-                  <View style={[styles.relationIconBox, isFilled && styles.relationIconBoxFilled]}>
-                    {isFilled ? (
-                      <Ionicons name="person" size={24} color="#FFF" />
+                <Pressable
+                  key={slot.type}
+                  style={styles.relationshipCard}
+                  disabled={relLoading}
+                  onPress={() => openInviteForType(slot.type)}
+                >
+                  <View style={styles.relationshipCardMedia}>
+                    {isAccepted && !!cardPhoto ? (
+                      <Image source={{ uri: cardPhoto }} style={styles.relationshipCardPhoto} />
                     ) : (
-                      <Ionicons name="add" size={24} color={theme.colors.textSecondary} />
+                      <View style={styles.relationshipCardPlaceholder}>
+                        <Ionicons
+                          name={isPending ? 'hourglass-outline' : isEmpty ? 'person-add-outline' : 'swap-horizontal-outline'}
+                          size={22}
+                          color={theme.colors.textMuted}
+                        />
+                      </View>
                     )}
                   </View>
-                  <Text style={styles.relLabel}>{rel}</Text>
+
+                  <View style={styles.relationshipCardBody}>
+                    <Text style={styles.relationshipCardTitle}>{slot.typeIcon} {slot.typeLabel}</Text>
+                    {isAccepted ? (
+                      <Text style={styles.relationshipCardSub}>You are connected</Text>
+                    ) : isPending ? (
+                      <Text style={styles.relationshipCardSub}>Waiting for someone</Text>
+                    ) : state === 'occupied' ? (
+                      <Text style={styles.relationshipCardSub} numberOfLines={1}>In use with {occupiedName}</Text>
+                    ) : (
+                      <Text style={styles.relationshipCardSub}>Waiting for someone</Text>
+                    )}
+                    <View style={styles.relationshipCardFooter}>
+                      <Text style={styles.relationshipCardCost}>
+                        {isEmpty ? `${slot.cost} coins` : state === 'occupied' ? 'Tap to switch' : 'Tap to manage'}
+                      </Text>
+                    </View>
+                  </View>
                 </Pressable>
               );
             })}
+            {!relationshipInfo.slots.length ? (
+              <Text style={styles.emptyGiftText}>Connections unavailable right now.</Text>
+            ) : null}
           </View>
         </View>
 
@@ -317,24 +441,91 @@ export default function GirlProfileScreen({ route, navigation }) {
 
       <CoinPackSheet
         visible={showCoinPackSheet}
-        onClose={() => setShowCoinPackSheet(false)}
-        context="gift"
+        onClose={async () => {
+          setShowCoinPackSheet(false);
+          if (pendingInviteIntent) {
+            const slot = findSlotByType(pendingInviteIntent.type);
+            if (slot) await handleInvite(slot);
+            setPendingInviteIntent(null);
+          }
+        }}
+        context="wallet"
         requiredCoins={coinsModalRequired}
       />
 
-      <Modal visible={!!activeRel} transparent animationType="fade">
+      <Modal visible={!!activeRel} transparent animationType="fade" onRequestClose={() => setActiveRel(null)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Choose Relationship</Text>
-            <Text style={styles.modalSub}>{activeRel}</Text>
-            <Text style={styles.modalCost}>Cost: 50 coins</Text>
+            <Text style={styles.modalTitle}>{activeRel?.typeIcon} Send {activeRel?.typeLabel} Request</Text>
+            <Text style={styles.modalSub}>{girl?.name}</Text>
+            <Text style={styles.modalCost}>Cost: {activeRel?.cost || 0} coins</Text>
+            <Text style={styles.modalCost}>Balance: {user?.coinBalance || 0} coins</Text>
+            <Text style={styles.modalCost}>After: {Math.max(0, (user?.coinBalance || 0) - (activeRel?.cost || 0))} coins</Text>
 
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalCancel} onPress={() => setActiveRel(null)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirm} onPress={confirmRelationship}>
-                <Text style={styles.modalConfirmText}>Confirm</Text>
+              <TouchableOpacity style={styles.modalConfirm} disabled={relLoading} onPress={() => handleInvite(activeRel)}>
+                <Text style={styles.modalConfirmText}>{relLoading ? 'Sending...' : 'Send Request'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!switchPrompt} transparent animationType="fade" onRequestClose={() => setSwitchPrompt(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{switchPrompt?.targetSlot?.typeIcon} You already have a {switchPrompt?.targetSlot?.typeLabel}</Text>
+            <Text style={styles.modalSub}>{switchPrompt?.occupiedBy?.girl?.name || 'Current connection'}</Text>
+            <Text style={styles.modalCost}>End existing bond and start new request?</Text>
+            <Text style={styles.modalCost}>No refund on spent coins.</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => setSwitchPrompt(null)}>
+                <Text style={styles.modalCancelText}>Keep Current</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirm}
+                disabled={relLoading}
+                onPress={async () => {
+                  const occupied = switchPrompt?.occupiedBy;
+                  const target = switchPrompt?.targetSlot;
+                  if (!occupied || !target) return;
+                  const ok = await handleBreakRelationship(occupied, 'switch');
+                  if (ok) {
+                    setSwitchPrompt(null);
+                    await handleInvite(target);
+                  }
+                }}
+              >
+                <Text style={styles.modalConfirmText}>{relLoading ? 'Working...' : 'End & Switch'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!breakPrompt} transparent animationType="fade" onRequestClose={() => setBreakPrompt(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>💔 End this bond?</Text>
+            <Text style={styles.modalSub}>{breakPrompt?.relationship?.girl?.name || girl?.name}</Text>
+            <Text style={styles.modalCost}>This cannot be undone. Coins will not be refunded.</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => setBreakPrompt(null)}>
+                <Text style={styles.modalCancelText}>Keep Bond</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirm}
+                disabled={relLoading}
+                onPress={async () => {
+                  const rel = breakPrompt?.relationship;
+                  const ok = await handleBreakRelationship(rel, 'manual_break');
+                  if (ok) setBreakPrompt(null);
+                }}
+              >
+                <Text style={styles.modalConfirmText}>{relLoading ? 'Ending...' : 'End Bond'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -393,25 +584,69 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 },
   bioText: { fontSize: 15, color: theme.colors.textSecondary, lineHeight: 22 },
   readMore: { fontSize: 14, color: theme.colors.accentCyan, marginTop: 4, fontWeight: '600' },
-  relationsRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 8 },
-  relationSlot: { alignItems: 'center', gap: 8, maxWidth: 92 },
-  relationIconBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: theme.colors.bgTertiary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  relationshipCardGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  relationshipCard: {
+    width: '31.5%',
+    backgroundColor: theme.colors.bgSecondary,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: theme.colors.borderGlass,
-    borderStyle: 'dashed',
+    padding: 10,
+    minHeight: 165,
   },
-  relationIconBoxFilled: {
-    backgroundColor: theme.colors.accentMagenta,
+  relationshipCardMedia: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  relationshipCardPhoto: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1.5,
     borderColor: theme.colors.accentMagenta,
-    borderStyle: 'solid',
   },
-  relLabel: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '500', textAlign: 'center' },
+  relationshipCardPlaceholder: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: theme.colors.bgTertiary,
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  relationshipCardBody: {
+    flex: 1,
+  },
+  relationshipCardTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  relationshipCardSub: {
+    marginTop: 6,
+    color: theme.colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 15,
+    textAlign: 'center',
+    minHeight: 30,
+  },
+  relationshipCardFooter: {
+    marginTop: 6,
+    alignItems: 'center',
+  },
+  relationshipCardCost: {
+    color: theme.colors.accentCyan,
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
   langRow: { flexDirection: 'row', gap: 10 },
   langBadge: {
     paddingHorizontal: 16,

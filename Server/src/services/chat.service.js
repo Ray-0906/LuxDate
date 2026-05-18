@@ -14,6 +14,7 @@ const formatLastMessagePreview = (message) => {
     return quantity > 1 ? `Sent ${quantity}x ${giftName}` : `Sent ${giftName}`;
   }
   if (type === MESSAGE_TYPES.PHOTO) return 'Photo';
+  if (type === MESSAGE_TYPES.RELATIONSHIP_EVENT) return message?.content?.text || 'Relationship update';
   return message?.content?.text || '';
 };
 

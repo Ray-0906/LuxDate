@@ -26,6 +26,7 @@ export const MESSAGE_TYPES = {
   PHOTO: 'photo',
   CALL_LOG: 'call_log',
   GIFT: 'gift',
+  RELATIONSHIP_EVENT: 'relationship_event',
 };
 
 // Who sent the message
@@ -106,7 +107,7 @@ export const CHAT_SESSION_STATUS = {
 // Relationship types
 export const RELATIONSHIP_TYPES = {
   SOULMATE: 'soulmate',
-  BEST_FRIEND: 'best_friend',
+  CLOSE_FRIEND: 'close_friend',
   LOVER: 'lover',
 };
 

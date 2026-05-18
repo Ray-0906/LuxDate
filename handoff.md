@@ -1,314 +1,268 @@
-# LuxDate Handoff
+# LuxDate Monetization Handoff
 
-**Last updated:** 2026-05-16  
-**Primary blocker for next agent:** Coin pack purchase on mobile — tap ₹100 triggers `GET /api/payments/gateways` (200) but **no visible UI** (no gateway picker, no spinner, no Razorpay/mock flow). Purchase flow is **not verified end-to-end** on device.
+Last updated: 2026-05-18
 
----
-
-## Project snapshot
-
-| Surface | Path | Role |
-|--------|------|------|
-| Mobile app | `LuxApp/` | React Native — coins, VIP, calls, chat, gifts |
-| API server | `Server/` | Express + MongoDB + Socket.IO |
-| Admin panel | `Admin/` | Catalog, users, coin packs, payments, VIP |
-
-**Repo root:** `LuxDate`
+This handoff documents how monetization works now, what has been implemented recently, and how to reason about flows/debugging quickly.
 
 ---
 
-## What is “monetization” in this project?
+## 1) Project Surfaces
 
-LuxDate monetization = **coins** (soft currency) + **VIP** (subscription) + **payments** (Razorpay / mock) + **spend** paths (calls, gifts, chat unlocks, etc.).
+- Mobile app: `LuxApp/` (React Native)
+- API server: `Server/` (Express + MongoDB)
+- Admin app: `Admin/` (manages packs/plans/payments)
 
-### Terms (product / engineering)
-
-| Term | Meaning |
-|------|---------|
-| **Coin** | In-app balance (`user.coinBalance`). Spent on gifts, calls, etc. |
-| **Coin pack** | Admin-defined SKU: `priceInr`, `coins`, optional `bonusCoins`, `contexts` (`wallet` \| `call` \| `gift`). |
-| **VIP plan** | Subscription SKU: duration, upfront coins, daily check-in coins, frame/badge. |
-| **Payment order** | Mongo `PaymentTransaction` row: `purpose` `coins` \| `vip`, `status` `created` → `success`, gateway metadata. |
-| **Gateway** | `mock` (dev/test, no real money) or `razorpay`. |
-| **Mock completion nonce** | One-time secret on mock orders; client must send it on verify (10 min TTL). |
-| **Fulfillment** | After verify: credit coins via `coinService.credit` or activate VIP via `vipService.activateFromPayment`. |
-| **Context** | Which packs appear: `GET /api/coins/packs?context=wallet` (also `call`, `gift`). |
-
-### Design intent (how it *should* work)
-
-1. User opens **Buy coins** (`CoinPackScreen`) or **CoinPackSheet** (chat/call/profile insufficient coins).
-2. App loads packs: `GET /api/coins/packs?context=...`.
-3. User taps a pack (e.g. ₹100).
-4. **Before creating a DB order:** app loads gateways `GET /api/payments/gateways`.
-   - **One** enabled gateway → go straight to checkout with that gateway.
-   - **Multiple** → show **in-app Modal** (`PaymentGatewayPickModal`) — **not** native `Alert`.
-5. App creates order: `POST /api/payments/coins/order` body `{ packId, gateway }` → **201** + `gatewayData`.
-6. **Mock:** show `MockPayConfirmModal` → user confirms → `POST /api/payments/orders/:transactionId/verify` with `{ mockCompletionNonce }` → coins credited.
-7. **Razorpay:** `react-native-razorpay` checkout → verify with Razorpay ids → coins credited.
-8. App refreshes profile (`loadProfile`), shows success.
-
-VIP (`VIPPlansScreen`) mirrors steps 3–8 with `POST /api/payments/vip/order` and VIP fulfillment.
-
-**Important product rule:** Do **not** create a payment order on pack tap alone; order is created only after gateway is chosen (avoids abandoned `created` rows).
+Monetization in this project includes:
+- Coin pack purchases (Razorpay or Mock)
+- VIP purchases (now supports parallel purchased VIP subscriptions)
+- Daily check-ins (free login + VIP plan schedule claims)
+- Coin balance and transaction ledgering
 
 ---
 
-## Monetization — server (implemented)
+## 2) Core Concepts and Data Model
 
-### Env / flags (`Server/.env`, `Server/src/config/env.js`)
+### Coins
+- User balance is on `User.coinBalance`.
+- Coin movement is written to `CoinTransaction`.
+- Coin spend/reward reasons use `COIN_TX_TYPES`.
 
-| Variable | Effect |
-|----------|--------|
-| `PAYMENT_MOCK=true` | Mock gateway enabled for new orders (typical local dev). |
-| `PAYMENT_MOCK=false` + Razorpay keys set | Real Razorpay path. |
-| Dev auto-mock | If `NODE_ENV=development` and `RAZORPAY_KEY_ID` empty, mock enables unless `PAYMENT_MOCK=false`. |
-| `PAYMENT_MOCK_ALLOW_PROD=true` | Allows mock in production (dangerous; off by default). |
+### Payments
+- Payment orders are `PaymentTransaction` (`Server/src/models/PaymentOrder.js`).
+- Gateway flow:
+  - Create order
+  - Verify payment
+  - Fulfill order (credit coins or activate VIP)
 
-See `Server/.env.example`.
+### VIP
+- Plan definition: `VipPlan` (price, duration, upfrontCoins, dailyCheckinCoins, etc.).
+- User purchase instances: `VipSubscription`.
+- Important: multiple active `VipSubscription` rows can coexist now (parallel plans).
 
-### Key files
-
-| Area | Path |
-|------|------|
-| Payment orchestration | `Server/src/services/payment/payment.service.js` |
-| Razorpay adapter | `Server/src/services/payment/razorpay.gateway.js` |
-| Mock adapter | `Server/src/services/payment/mock.gateway.js` |
-| Order model | `Server/src/models/PaymentOrder.js` (exported as `PaymentTransaction`) |
-| Coin packs | `Server/src/models/CoinPack.js`, `Server/src/services/coinPack.service.js` |
-| VIP | `Server/src/services/vip.service.js`, `Server/src/models/VipPlan.js` |
-| Routes | `Server/src/routes/payment.routes.js`, `coin.routes.js`, `vip.routes.js` |
-| Webhooks | `Server/src/routes/webhook.routes.js`, `Server/src/controllers/webhook.controller.js` |
-| Admin coin packs | `Server/src/routes/admin/admin.coinPack.routes.js` |
-| Admin payments | `Server/src/routes/admin/admin.payment.routes.js` |
-
-### API surface (authenticated)
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/payments/gateways` | List enabled gateways |
-| POST | `/api/payments/coins/order` | Create coin purchase order (`packId`, `gateway`) |
-| POST | `/api/payments/vip/order` | Create VIP order (`planId`, `gateway`) |
-| POST | `/api/payments/orders/:orderId/verify` | Verify mock or Razorpay payment |
-| GET | `/api/coins/packs` | List packs (`context` query) |
-| GET | `/api/vip/plans` | List VIP plans |
-
-Response envelope: `{ success, message, data }` via `Server/src/utils/response.js`.
-
-### Bugs fixed on server (during monetization work)
-
-1. **Razorpay `receipt` length > 40** — `buildGatewayReceipt()` + clamp in `razorpay.gateway.js`.
-2. **Mock gateway** — full create/verify path with nonce + expiry on `PaymentTransaction`.
-3. **Verify returns HTTP 200 with `verified: false`** — client must treat as failure (`assertPaymentVerified` in app).
-4. **Gateway choice on create** — `resolveCheckoutGateway(body.gateway)`; client must send `gateway` on order create.
-
-### Server status (agent assessment)
-
-Backend for gateways + order create + verify is **largely complete**. User logs show **`GET /api/payments/gateways` → 200**. That does **not** prove checkout works; often **no** `POST /api/payments/coins/order` appears after tap — failure is on the **client** after gateways fetch.
+### Daily Check-in
+- Daily check-in records: `DailyCheckin`.
+- Supports free login check-in and VIP check-ins.
+- VIP check-ins now track per-subscription claims with day-level metadata.
 
 ---
 
-## Monetization — mobile (implemented, not working on device)
+## 3) Current Monetization Architecture (Implemented)
 
-### Key files
+## 3.1 Coin Pack Purchase Flow
 
-| File | Role |
-|------|------|
-| `LuxApp/src/payments/runPayments.js` | `fetchPaymentGatewayNames`, `checkoutAndVerifyCoinPack`, `checkoutAndVerifyVip` |
-| `LuxApp/src/components/PaymentGatewayPickModal.jsx` | Gateway picker (React Modal) |
-| `LuxApp/src/components/MockPayConfirmModal.jsx` | Mock confirm (React Modal) |
-| `LuxApp/src/screens/Me/CoinPackScreen.jsx` | Full-screen buy coins |
-| `LuxApp/src/components/CoinPackSheet.jsx` | Bottom sheet (chat/call/profile) |
-| `LuxApp/src/screens/Me/VIPPlansScreen.jsx` | VIP subscribe |
-| `LuxApp/src/screens/Me/WalletScreen.jsx` | Nav to CoinPack + history |
-| `LuxApp/src/screens/Me/TransactionHistoryScreen.jsx` | History UI |
-| `LuxApp/src/api/services.js` | `paymentsApi`, `coinsApi`, `vipApi` |
+Primary files:
+- App checkout: `LuxApp/src/screens/Me/CoinPackScreen.jsx`
+- Shared payment runner: `LuxApp/src/payments/runPayments.js`
+- API calls: `LuxApp/src/api/services.js`
+- Server payment service: `Server/src/services/payment/payment.service.js`
 
-### Navigation entry points
+Flow:
+1. Load packs via `GET /api/coins/packs?context=wallet`.
+2. Fetch gateways via `GET /api/payments/gateways`.
+3. If one gateway -> direct checkout.
+4. If multiple -> gateway picker modal.
+5. Create order: `POST /api/payments/coins/order`.
+6. Complete gateway:
+   - Mock: modal confirm + verify
+   - Razorpay: native checkout + verify
+7. Verify: `POST /api/payments/orders/:id/verify`.
+8. Fulfillment credits coins and app refreshes profile.
 
-- Profile → Buy coins / balance → `CoinPack`
-- Wallet → `CoinPack`
-- Insufficient coins → `CoinPackSheet` on Conversation, VideoCall, GirlProfile, Incoming/Outgoing call
-
-### Intended client flow (`CoinPackScreen.handleBuy`)
-
-```
-onPress pack
-  → fetchPaymentGatewayNames()     // GET /payments/gateways
-  → if 0 gateways: Alert error
-  → if 1 gateway: runCheckout(pack, gateway)   // sets buyingId, POST order, mock/Razorpay
-  → if 2+ gateways: setGwPick({ visible: true, ... })  // PaymentGatewayPickModal
-       → onSelect → runCheckout(pack, gateway)
-```
-
-`runCheckout` calls `checkoutAndVerifyCoinPack(packId, { gateway, confirmMockUi })`.
-
-### Refactor history (why this matters)
-
-**Original broken pattern (removed from `runPayments.js` but may still be on device if bundle not reloaded):**
-
-- `pickCheckoutGateway()` used **`Alert.alert`** inside `deferUi` / async after `setBuyingId`.
-- On Android (especially with other Modals open), **Alert Promise often never resolves** → stuck spinner, **no POST order**.
-
-**Attempted fix (current code in repo):**
-
-- Remove `Alert` for gateway + mock confirm.
-- Screens own Modals; `runPayments` requires explicit `gateway` + `confirmMockUi` callback.
-
-**Debug instrumentation still in tree (session `a0d528`):**
-
-- `fetch` to `http://127.0.0.1:7800/ingest/...` in `runPayments.js` and `CoinPackScreen.jsx` (`// #region agent log`).
-- Log file expected: `debug-a0d528.log` at repo root — **was never created** in session (ingest server not reachable from emulator/device).
-- **Remove** these regions after fix is verified.
+Stability improvements implemented:
+- Robust gateway parsing from API shape variants.
+- Mock order normalization and timeout protection.
+- Explicit loading states for gateway fetch and checkout.
 
 ---
 
-## Current bug (user report — 2026-05-16)
+## 3.2 VIP Purchase Flow
 
-### Symptoms
+Primary files:
+- VIP screen: `LuxApp/src/screens/Me/VIPPlansScreen.jsx`
+- Shared payment runner: `LuxApp/src/payments/runPayments.js`
+- VIP service: `Server/src/services/vip.service.js`
+- Payment service (VIP order): `Server/src/services/payment/payment.service.js`
 
-- Tap **₹100** pack on Buy coins screen.
-- **No UI feedback:** no loading spinner on row, no gateway modal, no mock confirm, no Razorpay sheet.
-- Server log shows **`GET /api/payments/gateways` → 200** (and earlier logs also showed `GET /api/coins/packs?context=wallet` 200).
-- User believes backend works; **frontend appears dead** after gateways call.
+Flow:
+1. Load plans: `GET /api/vip/plans`.
+2. Load user status: `GET /api/vip/status`.
+3. Purchase selected plan:
+   - gateways -> order create `POST /api/payments/vip/order`
+   - payment verify
+   - fulfillment activates a new `VipSubscription`
+4. Upfront VIP coins are granted on activation.
 
-### Observed server pattern (from terminal)
-
-```
-GET /api/coins/packs?context=wallet   200
-GET /api/payments/gateways            200
-(often NO POST /api/payments/coins/order after tap)
-```
-
-### Likely causes (ranked for next agent)
-
-1. **Stale JS bundle** — Metro not reloaded; device still running old `runPayments.js` with `pickCheckoutGateway` + `Alert` hang **after** `buyingId` set OR hang inside checkout without reaching POST.
-2. **Multiple gateways + Modal not visible** — `handleBuy` sets `gwPick.visible` but **no `buyingId`** until selection → user sees “nothing” (no spinner). `PaymentGatewayPickModal` may not render (z-index, parent, or state not updating). **Check how many gateways** `GET /gateways` returns in DB.
-3. **Single gateway + silent failure before `setBuyingId`** — unlikely if `runCheckout` is entered (first line is `setBuyingId`). If `handleBuy` throws parsing gateways response, user might see nothing if error swallowed — verify `fetchPaymentGatewayNames` parsing matches API shape: `res.data.data.gateways`.
-4. **Mock path: `confirmMockUi` Modal never shown** — Promise waits forever; if `buyingId` was set, spinner would show — user says no spinner → points to **stuck before `runCheckout`** (cases 1–2).
-5. **`CoinPackSheet` nested Modal** — sheet + gateway modal stacking on Android needs explicit testing.
-
-### What was **not** proven
-
-- End-to-end coin purchase on emulator/device after Modal refactor.
-- `POST /api/payments/coins/order` immediately after gateway selection.
-- `debug-a0d528` ingest logs on device.
+Current behavior:
+- VIP plans can be purchased in parallel (weekly/monthly/quarterly all allowed).
+- Purchased plans are marked by per-plan subscription progress from status payload.
 
 ---
 
-## Recommended debug workflow (next agent)
+## 3.3 VIP Daily Check-in Flow (Parallel Plans)
 
-1. **Confirm bundle:** Full Metro restart (`npx react-native start --reset-cache`), rebuild app, not just fast refresh.
-2. **Log gateways count** on device: temporary `console.log` in `CoinPackScreen.handleBuy` after fetch — or proxy API response.
-3. **Server:** After tap, expect sequence:
-   - `GET /payments/gateways`
-   - then **`POST /payments/coins/order`** (201)
-   - then **`POST /payments/orders/:id/verify`** (mock) or Razorpay UI.
-4. If only `GET gateways` fires:
-   - Breakpoint / log at start of `handleBuy`, after fetch, before `setGwPick`, start of `runCheckout`.
-   - If `gateways.length > 1`, inspect `PaymentGatewayPickModal` `visible` prop and React DevTools state.
-5. **DB:** `PaymentGateway` collection — how many `isEnabled: true`? Mock-only vs mock+razorpay changes UI branch.
-6. Remove `// #region agent log` fetch blocks once fixed.
-7. Test **CoinPackSheet** from chat insufficient-coins path separately (nested Modal).
+Primary files:
+- Frontend claim UI: `LuxApp/src/screens/Me/VIPPlansScreen.jsx`
+- Claim API: `POST /api/coins/checkin` via `LuxApp/src/api/services.js`
+- Claim engine: `Server/src/engines/MonetizationController.js`
+- Status assembler: `Server/src/services/vip.service.js`
+- Subscription model: `Server/src/models/VipSubscription.js`
+- Daily record model: `Server/src/models/DailyCheckin.js`
 
-### Quick API checks (curl / Postman)
+Key rule currently implemented:
+- For a purchased plan, unlocked and unclaimed days are claimable by sending plan/subscription context.
+- Claim request includes:
+  - `subscriptionId`
+  - `planId`
+  - `dayNumber`
 
-```http
-GET  /api/payments/gateways          Authorization: Bearer <token>
-POST /api/payments/coins/order       { "packId": "<id>", "gateway": "mock" }
-POST /api/payments/orders/<txnId>/verify   { "mockCompletionNonce": "<from create response>" }
-```
+Status shape used by app:
+- `vip.status` returns `plansProgress[]` (also mirrored as `subscriptions[]`) with:
+  - `subscriptionId`, `planId`, `planName`, `planSlug`
+  - `expiresAt`, `daysRemaining`, `checkinCoins`
+  - `canClaimNow`
+  - `progress`:
+    - `daysClaimed`
+    - `claimedDayNumbers`
+    - `unlockedDays`
+    - `unlockedUnclaimedDays`
+    - `totalDays`
+    - `remainingCheckins`
+    - `remainingCoinsToCollect`
 
----
-
-## Monetization — admin (implemented)
-
-| Page | Path |
-|------|------|
-| Coin packs CRUD | `Admin/src/pages/CoinPacksPage.jsx` |
-| Payments list | `Admin/src/pages/PaymentsPage.jsx` |
-| VIP | `Admin/src/pages/VipPage.jsx` |
-| User coin adjust | `Admin/src/pages/UsersPage.jsx` (touched) |
-
-Routes wired in `Admin/src/App.jsx` / `Admin/src/api/services.js`.
-
----
-
-## VIP & coins (non-payment)
-
-- Daily check-in: `GET/POST /api/coins/checkin/*`, IST helpers `Server/src/utils/timeIST.js`.
-- VIP status: `GET /api/vip/status`; distribution helpers `Server/src/utils/vipDistribution.js`.
-- Legacy direct VIP purchase endpoint may still exist; **preferred path** is payment orders + verify.
+Frontend uses this to render per-plan schedule card state:
+- Claimed day -> checkmark
+- Unlocked + unclaimed -> claimable
+- Locked -> lock icon
 
 ---
 
-## Gifting (separate track — largely done)
+## 4) Notable Fixes Implemented in This Iteration
 
-Backend gifting is **implemented** (catalog, send, transactions, socket `new_message`). Main remaining risk was **gift picker UI polish**, not payments.
+## 4.1 Checkout and Purchase UX
+- Fixed dead-click payment starts by adding deterministic gateway progression and visible loading.
+- Fixed gateway modal wiring for VIP purchase path (`plan` path handling).
+- Fixed stuck mock path with normalized payload handling and timeout guard.
 
-### Quick reference
+## 4.2 VIP Plan Rendering
+- Added resilient plan mapping/fallback for varying backend fields.
+- Removed invalid/zero-benefit VIP plan entries from display.
+- Removed forced mock/filler plans in VIP UI.
 
-| Layer | Path |
-|-------|------|
-| Service | `Server/src/services/gift.service.js` |
-| Mobile picker | `LuxApp/src/components/GiftPickerModal.jsx` |
-| Send hook | `LuxApp/src/hooks/useGiftActions.js` |
+## 4.3 VIP Activation / CTA / Schedule State
+- Active plan identification now uses stable backend `planId` contract.
+- CTA behavior no longer ambiguous for active vs purchasable states.
+- Schedule cards support claimed/unlocked/locked visuals and explicit tap feedback.
 
-### Gifting notes for monetization overlap
+## 4.4 Parallel VIP Subscriptions
+- Backend no longer enforces single active VIP replacement.
+- New purchase does not replace existing active subscriptions.
+- VIP status returns per-subscription progress arrays.
 
-- Gifts spend **existing** `coinBalance` (no Razorpay on send).
-- Insufficient coins opens **`CoinPackSheet`** — **same broken purchase flow** as CoinPack screen.
-
-### User preferences (gifting UI)
-
-- Bottom sheet, vertical price-sorted grid, fixed footer quantity bar, no level tabs.
-- Validate on real device before claiming fixed.
-
----
-
-## Git / uncommitted state (snapshot)
-
-Many monetization files are modified or untracked across `LuxApp/`, `Server/`, `Admin/`. **Do not commit `Server/.env`** (secrets). Android `build/` and `node_modules` artifacts may appear in `git status` — ignore.
-
----
-
-## Files to open first (monetization bug)
-
-1. `LuxApp/src/screens/Me/CoinPackScreen.jsx` — `handleBuy`, `gwPick`, `runCheckout`
-2. `LuxApp/src/payments/runPayments.js` — ensure no `Alert` / `pickCheckoutGateway`
-3. `LuxApp/src/components/PaymentGatewayPickModal.jsx`
-4. `LuxApp/src/components/MockPayConfirmModal.jsx`
-5. `LuxApp/src/components/CoinPackSheet.jsx` — nested modal path
-6. `Server/src/services/payment/payment.service.js` — `getAvailableGateways`, `createCoinPurchaseOrder`
+## 4.5 Check-in Reliability + Dev Mongo Support
+- Claim path now supports standalone MongoDB (non-replica) fallback when transactions are unsupported.
+- Optional config: `MONGO_USE_TRANSACTIONS` (`false` disables transaction usage explicitly).
+- Idempotent coin grant reference patterns used in claim flow:
+  - VIP: `vip:<subscriptionId>:day:<dayNumber>`
+  - Free: `free:<userId>:<yyyy-mm-dd>`
 
 ---
 
-## Honest status summary
+## 5) Important API Endpoints
 
-| Area | Status |
-|------|--------|
-| Coin pack / VIP models & admin | Implemented |
-| Payment service (mock + Razorpay, verify, fulfill) | Implemented; receipt length fixed |
-| Mobile API client | Implemented |
-| Mobile checkout UX (Modals, no Alert) | **Coded in repo; not confirmed on device** |
-| **₹100 tap → purchase complete** | **BROKEN / unverified** |
-| Gifting backend | Working |
-| Gift picker UI polish | May still need device tuning |
+Payments:
+- `GET /api/payments/gateways`
+- `POST /api/payments/coins/order`
+- `POST /api/payments/vip/order`
+- `POST /api/payments/orders/:orderId/verify`
 
----
+VIP:
+- `GET /api/vip/plans`
+- `GET /api/vip/status`
 
-## Agent session notes (payments debug)
-
-- User frustration: repeated “loading forever” on ₹100 row was traced (in code review) to **`Alert.alert` + async** blocking `checkoutAndVerifyCoinPack` before order POST.
-- Refactor to Modal-based gateway/mock confirm was **written** but user still reports **zero UI** with only `GET gateways` 200 — suggests **reload issue**, **multi-gateway modal invisible**, or **failure between fetch and `runCheckout`**.
-- Instrumentation to `127.0.0.1:7800` is useless on physical device unless port-forwarded; use `console.log` or React Native debugger instead.
+Coins / Check-in:
+- `GET /api/coins/checkin/status`
+- `POST /api/coins/checkin` (supports VIP claim context body)
 
 ---
 
-## Suggested next steps (priority)
+## 6) Current Config Knobs
 
-1. Fix coin purchase UI E2E on `CoinPackScreen` (then `CoinPackSheet`).
-2. Verify server logs show POST order + verify on happy path mock.
-3. Test Razorpay with real keys when mock disabled.
-4. Remove debug `fetch` ingest blocks.
-5. Optional: admin reconcile / stale `created` orders cleanup.
-6. Return to gift picker polish only after payments work.
+From `Server/src/config/env.js`:
+- `PAYMENT_MOCK` -> mock gateway on/off
+- `PAYMENT_MOCK_ALLOW_PROD` -> allows mock in production when explicitly set
+- `MONGO_USE_TRANSACTIONS`:
+  - default: enabled
+  - set `false` for local standalone Mongo to avoid transaction-only behavior
+
+---
+
+## 7) Debugging Guide for Engineers
+
+### A) “Payment click does nothing”
+Check:
+1. `GET /api/payments/gateways` response shape and count.
+2. Gateway selection state in screen.
+3. Order create request fired (`/coins/order` or `/vip/order`) after gateway selection.
+
+### B) “Claim tap does nothing”
+Check:
+1. Frontend is sending `subscriptionId`, `planId`, `dayNumber`.
+2. Status payload has corresponding purchased plan in `plansProgress`.
+3. Day state is unlocked and not already in `claimedDayNumbers`.
+4. Response envelope `data.success` is checked in UI (not only HTTP status).
+
+### C) “Coins not added after claim”
+Check:
+1. `MonetizationController.claimDailyCheckin` return payload and errors.
+2. `CoinTransaction` row exists with check-in reference id.
+3. `User.coinBalance` updated.
+4. App calls `loadProfile()` after successful claim.
+
+### D) “Local Mongo errors around transactions”
+Check:
+1. If using standalone Mongo, set `MONGO_USE_TRANSACTIONS=false`.
+2. Verify fallback path logs and claim still succeeds without replica set.
+
+---
+
+## 8) Verification Commands Used
+
+Typical focused checks:
+- App lint:
+  - `npx eslint "src/screens/Me/VIPPlansScreen.jsx" "src/screens/Me/CoinPackScreen.jsx" "src/payments/runPayments.js"`
+- Server lint/syntax:
+  - `npx eslint "src/services/vip.service.js" "src/engines/MonetizationController.js" "src/services/payment/payment.service.js"`
+  - `node --check "src/engines/MonetizationController.js"`
+  - `node --check "src/services/vip.service.js"`
+
+---
+
+## 9) Known Tradeoffs / Next Improvements
+
+1. Add explicit automated integration tests for:
+- parallel VIP subscriptions
+- multi-day catch-up claims
+- idempotent duplicate claim handling
+
+2. Add admin observability page/widgets:
+- per-subscription claim progress
+- failed claim reasons
+- idempotency hit metrics
+
+3. Audit and remove debug telemetry hooks remaining in mobile checkout code if no longer needed.
+
+4. Tighten contract docs for:
+- `vip/status` schema (`plansProgress`)
+- `coins/checkin` VIP claim payload semantics.
+
+---
+
+## 10) Quick Mental Model
+
+- **Payments** create/verify/fulfill.
+- **VIP purchase** creates a subscription row per purchase.
+- **Status** returns per-subscription progress.
+- **UI** renders and claims against that specific subscription/day.
+- **Claim** writes idempotent coin transaction + updates claimed day tracking.
+
+This is the current source of truth for monetization behavior in the repository.

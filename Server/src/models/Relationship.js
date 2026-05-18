@@ -13,9 +13,19 @@ const relationshipSchema = new mongoose.Schema(
     coinsSpent: { type: Number, required: true },
     status: {
       type: String,
-      enum: ['active', 'ended'],
-      default: 'active',
+      enum: ['pending', 'accepted', 'ended', 'active'],
+      default: 'pending',
     },
+    requestedAt: { type: Date, default: Date.now },
+    acceptanceDueAt: { type: Date, default: null },
+    acceptedAt: { type: Date, default: null },
+    endedAt: { type: Date, default: null },
+    endedReason: {
+      type: String,
+      enum: ['manual_break', 'switch', 'admin', 'unknown'],
+      default: null,
+    },
+    acceptanceNotificationSentAt: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -28,8 +38,16 @@ const relationshipSchema = new mongoose.Schema(
   }
 );
 
-relationshipSchema.index({ userId: 1, girlProfileId: 1 }, { unique: true });
-relationshipSchema.index({ userId: 1, status: 1 });
+relationshipSchema.index(
+  { userId: 1, type: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ['pending', 'accepted', 'active'] } },
+  }
+);
+relationshipSchema.index({ userId: 1, girlProfileId: 1, type: 1 });
+relationshipSchema.index({ userId: 1, status: 1, requestedAt: -1 });
+relationshipSchema.index({ status: 1, acceptanceDueAt: 1 });
 
 const Relationship = mongoose.model('Relationship', relationshipSchema);
 export default Relationship;

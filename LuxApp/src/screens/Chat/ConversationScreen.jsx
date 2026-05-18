@@ -251,6 +251,24 @@ export default function ConversationScreen({ route, navigation }) {
     const type = item.content?.type || 'text';
     const text = item.content?.text || '';
     const url = item.content?.mediaUrl || null;
+    const relationshipEventType = item.content?.relationshipEvent?.eventType || '';
+
+    if (type === 'relationship_event') {
+      const isBreak = relationshipEventType === 'ended';
+      return (
+        <View style={styles.relationshipCardWrap}>
+          <View style={[styles.relationshipCard, isBreak ? styles.relationshipCardBreak : styles.relationshipCardAccept]}>
+            <Text style={styles.relationshipCardTitle}>
+              {isBreak ? '💔 Bond Ended' : '💫 Relationship Update'}
+            </Text>
+            <Text style={styles.relationshipCardBody}>{text}</Text>
+            {item.content?.relationshipEvent?.quote ? (
+              <Text style={styles.relationshipCardQuote}>“{item.content.relationshipEvent.quote}”</Text>
+            ) : null}
+          </View>
+        </View>
+      );
+    }
 
     return (
       <View style={[styles.messageWrapper, isMe ? styles.messageWrapperMe : styles.messageWrapperGirl]}>
@@ -277,6 +295,11 @@ export default function ConversationScreen({ route, navigation }) {
                 <Text style={[styles.giftBubbleSub, isMe ? styles.messageTextMe : styles.messageTextGirl]}>
                   {item.content?.totalCoinsSpent || 0} coins
                 </Text>
+                {item.content?.relationshipGiftHeadline ? (
+                  <Text style={[styles.giftBubbleHeadline, isMe ? styles.messageTextMe : styles.messageTextGirl]}>
+                    {item.content.relationshipGiftHeadline}
+                  </Text>
+                ) : null}
                 {item.content?.sentDuringCallSessionId ? (
                   <Text style={[styles.giftBubbleTag, isMe ? styles.messageTextMe : styles.messageTextGirl]}>
                     Sent during call
@@ -544,7 +567,48 @@ const styles = StyleSheet.create({
   giftBubbleCopy: { flexShrink: 1 },
   giftBubbleTitle: { fontSize: 15, fontWeight: '800' },
   giftBubbleSub: { marginTop: 3, fontSize: 12, opacity: 0.9 },
+  giftBubbleHeadline: { marginTop: 6, fontSize: 12, fontWeight: '700' },
   giftBubbleTag: { marginTop: 5, fontSize: 11, opacity: 0.8 },
+  relationshipCardWrap: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  relationshipCard: {
+    width: '92%',
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  relationshipCardAccept: {
+    backgroundColor: 'rgba(157, 78, 221, 0.15)',
+    borderColor: theme.colors.accentViolet,
+  },
+  relationshipCardBreak: {
+    backgroundColor: 'rgba(255, 48, 64, 0.12)',
+    borderColor: theme.colors.accentRed,
+  },
+  relationshipCardTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  relationshipCardBody: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    color: theme.colors.textPrimary,
+    fontWeight: '700',
+  },
+  relationshipCardQuote: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: theme.colors.textSecondary,
+    fontStyle: 'italic',
+  },
   levelUpBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',

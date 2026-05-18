@@ -33,6 +33,7 @@ import giftRoutes from './src/routes/gift.routes.js';
 import videoCallRoutes from './src/routes/videoCall.routes.js';
 import vipRoutes from './src/routes/vip.routes.js';
 import coinRoutes from './src/routes/coin.routes.js';
+import relationshipRoutes from './src/routes/relationship.routes.js';
 import webhookRoutes from './src/routes/webhook.routes.js';
 import adminCoinPackRoutes from './src/routes/admin/admin.coinPack.routes.js';
 import adminPaymentRoutes from './src/routes/admin/admin.payment.routes.js';
@@ -102,6 +103,7 @@ app.use('/api/gifts', giftRoutes);
 app.use('/api/calls', videoCallRoutes);
 app.use('/api/vip', vipRoutes);
 app.use('/api/coins', coinRoutes);
+app.use('/api/relationships', relationshipRoutes);
 
 // ─── 404 Handler ────────────────────────────────────────
 app.use((req, res) => {
