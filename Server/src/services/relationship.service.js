@@ -166,9 +166,10 @@ function buildSlot(type, current, targetGirlId, girlsById) {
   const relationshipGirlId = toId(current.girlProfileId);
   const currentGirl = girlsById.get(relationshipGirlId) || null;
   const relationship = toPublicRelationship(current, currentGirl);
+  const isMyConnectionsView = !targetGirlId;
   const isOnCurrentGirl = targetGirlId && relationshipGirlId === targetGirlId;
 
-  if (isOnCurrentGirl) {
+  if (isMyConnectionsView || isOnCurrentGirl) {
     return {
       type,
       typeLabel: config.label,

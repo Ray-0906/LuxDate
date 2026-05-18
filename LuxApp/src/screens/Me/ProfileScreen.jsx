@@ -196,8 +196,8 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.connectionsTitle}>My Connections</Text>
           <View style={styles.connectionCardGrid}>
             {myConnections.map((slot) => {
-              const rel = slot.relationship;
-              const isActive = slot.state === 'accepted' || slot.state === 'pending';
+              const rel = slot.relationship || slot.occupiedBy;
+              const isActive = !!rel && (slot.state === 'accepted' || slot.state === 'pending' || slot.state === 'occupied');
               const girlPhoto = rel?.girl?.photo || '';
               return (
                 <Pressable

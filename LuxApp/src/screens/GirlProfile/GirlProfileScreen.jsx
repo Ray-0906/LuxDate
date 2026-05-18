@@ -279,7 +279,9 @@ export default function GirlProfileScreen({ route, navigation }) {
               const isAccepted = state === 'accepted';
               const isPending = state === 'pending';
               const isEmpty = state === 'empty';
-              const cardPhoto = isAccepted ? (user?.profilePhotoUrl || '') : '';
+              const cardPhoto = isAccepted
+                ? (user?.profilePhotoUrl || 'https://via.placeholder.com/120x120.png?text=You')
+                : '';
 
               return (
                 <Pressable
