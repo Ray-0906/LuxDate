@@ -11,6 +11,8 @@ router.get('/prefetch', chatController.prefetchAutoMessages);
 router.post('/deliver-prefetch', chatController.deliverPrefetchMessage);
 router.get('/:girlId/messages', chatController.getMessages);
 router.post('/:girlId/send', chatController.sendMessage);
+router.delete('/conversation/:conversationId', chatController.deleteConversation);
 router.delete('/clear-all', chatController.clearAll);
 
 export default router;
+

@@ -19,7 +19,8 @@ export const callsApi = {
   trigger: (girlId) => api.get('/calls/trigger', { params: { girlId } }),
   accept: (callId, config) => api.post(`/calls/${callId}/accept`, {}, config || {}),
   end: (callId, data) => api.post(`/calls/${callId}/end`, data),
-  history: (params) => api.get('/calls/history', { params }),
+  history: (params) => api.get('/calls/history', { params }),  
+  clearHistory: () => api.delete('/calls/history'),
 };
 
 export const chatApi = {
@@ -28,6 +29,7 @@ export const chatApi = {
   send: (girlId, data) => api.post(`/chat/${girlId}/send`, data),
   clearAll: () => api.delete('/chat/clear-all'),
   clearCalls: () => api.delete('/chat/calls/clear'),
+  clearConversation: (conversationId) => api.delete(`/chat/conversation/${conversationId}`),
 };
 
 export const mediaApi = {

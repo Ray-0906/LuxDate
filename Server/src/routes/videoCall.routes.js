@@ -9,5 +9,7 @@ router.get('/trigger', videoCallController.trigger);
 router.post('/:callId/accept', videoCallController.acceptCall);
 router.post('/:callId/end', videoCallController.endCall);
 router.get('/history', videoCallController.history);
+router.delete('/history', videoCallController.clearHistory);
 
 export default router;
+

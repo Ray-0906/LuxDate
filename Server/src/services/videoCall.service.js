@@ -161,6 +161,14 @@ const videoCallService = {
   /**
    * GET /calls/history
    */
+    /**
+   * DELETE /videoCall/history
+   */
+  async clearAllHistory(userId) {
+    await CallSession.deleteMany({ userId });
+    return true;
+  },
+
   async getCallHistory(userId, query = {}) {
     const page = parseInt(query.page) || 1;
     const limit = parseInt(query.limit) || 20;
@@ -181,3 +189,4 @@ const videoCallService = {
 };
 
 export default videoCallService;
+

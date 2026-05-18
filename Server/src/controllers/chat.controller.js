@@ -30,6 +30,13 @@ const chatController = {
     } catch (e) { next(e); }
   },
 
+    async deleteConversation(req, res, next) {
+    try {
+      await chatService.deleteConversation(req.user._id, req.params.conversationId);
+      return ApiResponse.success(res, { message: 'Conversation deleted' });
+    } catch (e) { next(e); }
+  },
+
   async clearAll(req, res, next) {
     try {
       await chatService.clearAll(req.user._id);
@@ -54,3 +61,4 @@ const chatController = {
 };
 
 export default chatController;
+

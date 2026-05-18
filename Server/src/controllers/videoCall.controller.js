@@ -46,6 +46,13 @@ const videoCallController = {
     } catch (e) { next(e); }
   },
 
+    async clearHistory(req, res, next) {
+    try {
+      await videoCallService.clearAllHistory(req.user._id);
+      return ApiResponse.success(res, { message: 'Call history cleared' });
+    } catch (e) { next(e); }
+  },
+
   async history(req, res, next) {
     try {
       const result = await videoCallService.getCallHistory(req.user._id, req.query);
@@ -55,3 +62,4 @@ const videoCallController = {
 };
 
 export default videoCallController;
+

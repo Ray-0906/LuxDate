@@ -23,6 +23,7 @@ import GirlProfileScreen from '../screens/GirlProfile/GirlProfileScreen.jsx';
 import IncomingCallScreen from '../screens/IncomingCall/IncomingCallScreen.jsx';
 import OutgoingCallScreen from '../screens/OutgoingCall/OutgoingCallScreen.jsx';
 import VideoCallScreen from '../screens/VideoCall/VideoCallScreen.jsx';
+import CallHistoryScreen from '../screens/Chat/CallHistoryScreen';
 import ConversationScreen from '../screens/Chat/ConversationScreen.jsx';
 import WalletScreen from '../screens/Me/WalletScreen.jsx';
 import CoinPackScreen from '../screens/Me/CoinPackScreen.jsx';
@@ -117,7 +118,7 @@ function AppStack() {
       />
       {/* These screens will be built in later phases */}
       <Stack.Screen name="Conversation" component={ConversationScreen} options={{ animation: 'slide_from_right' }} />
-      {/* <Stack.Screen name="CallHistory" component={CallHistoryScreen} /> */}
+      <Stack.Screen name="CallHistory" component={CallHistoryScreen} />
       <Stack.Screen
         name="IncomingCall"
         component={IncomingCallScreen}
@@ -179,3 +180,4 @@ export default function AppNavigator() {
     </NavigationContainer>
   );
 }
+

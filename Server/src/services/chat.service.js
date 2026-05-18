@@ -190,6 +190,22 @@ const chatService = {
   /**
    * DELETE /chat/clear-all
    */
+    /**
+   * DELETE /chat/conversation/:conversationId
+   */
+  async deleteConversation(userId, girlProfileId) {
+    const session = await ChatSession.findOneAndDelete(
+      { girlProfileId, userId },
+    );
+    
+    if (!session) {
+      throw new Error('Conversation not found');
+    }
+    const deletedmsgs= await ChatMessage.deleteMany({ userId, girlProfileId });
+
+    return session;
+  },
+
   async clearAll(userId) {
     await ChatSession.updateMany({ userId }, { status: CHAT_SESSION_STATUS.CLOSED });
     return { cleared: true };
@@ -297,3 +313,4 @@ const chatService = {
 };
 
 export default chatService;
+
