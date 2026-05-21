@@ -47,7 +47,7 @@ const adminGirlController = {
 
   async addPhotos(req, res, next) {
     try {
-      const buffers = req.files?.map((f) => f.buffer) || [];
+      const buffers = req.files?.map((f) => f.buffer) || []; 
       const result = await girlService.addPhotos(req.params.girlId, buffers);
       return ApiResponse.success(res, { data: result, message: 'Photos added' });
     } catch (error) {

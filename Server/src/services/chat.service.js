@@ -191,7 +191,7 @@ const chatService = {
    * DELETE /chat/clear-all
    */
     /**
-   * DELETE /chat/conversation/:conversationId
+   * DELETE /chat/conversation/:girlId
    */
   async deleteConversation(userId, girlProfileId) {
     const session = await ChatSession.findOneAndDelete(

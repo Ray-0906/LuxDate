@@ -43,8 +43,8 @@ const girlService = {
     if (!girl) throw new NotFoundError('Girl profile not found');
 
     const allowedFields = [
-      'name', 'age', 'bio', 'location', 'language', 'charmLevel',
-      'distanceKm', 'isActive', 'firstMessages',
+      'name', 'age', 'bio', 'location', 'region', 'language', 'charmLevel',
+      'distanceKm', 'isActive', 'firstMessages', 'photos', 'relationshipFeatureEnabled'
     ];
     for (const field of allowedFields) {
       if (updates[field] !== undefined) {
@@ -52,16 +52,15 @@ const girlService = {
       }
     }
 
-    await girl.save();
+    await girl.save({ validateModifiedOnly: true });
     return girl;
   },
 
   async updateProfilePhoto(girlId, buffer) {
     const girl = await GirlProfile.findById(girlId);
     if (!girl) throw new NotFoundError('Girl profile not found');
-
     const photo = await uploadService.uploadGirlPhoto(buffer, girlId);
-
+ 
     // Replace first photo or add
     if (girl.photos.length > 0) {
       girl.photos[0] = photo.url;
@@ -69,7 +68,7 @@ const girlService = {
       girl.photos.push(photo.url);
     }
 
-    await girl.save();
+    await girl.save({ validateModifiedOnly: true });
     return girl;
   },
 
@@ -78,13 +77,13 @@ const girlService = {
     if (!girl) throw new NotFoundError('Girl profile not found');
 
     const uploadPromises = buffers.map((buf) =>
-      uploadService.uploadGirlPhoto(buf, girlId)
+      uploadService.uploadGirlPhoto(buf, girlId) 
     );
     const photos = await Promise.all(uploadPromises);
     const urls = photos.map((p) => p.url);
 
     girl.photos.push(...urls);
-    await girl.save();
+    await girl.save({ validateModifiedOnly: true });
 
     return { photos: urls, girl };
   },
@@ -135,7 +134,7 @@ const girlService = {
     });
 
     girl.videoUrl = result.url;
-    await girl.save();
+    await girl.save({ validateModifiedOnly: true });
 
     return { videoUrl: result.url };
   },
@@ -165,7 +164,7 @@ const girlService = {
       } catch { /* Log but don't fail */ }
       
       girl.videoUrl = '';
-      await girl.save();
+      await girl.save({ validateModifiedOnly: true });
     }
     return { deleted: true };
   },
@@ -176,7 +175,7 @@ const girlService = {
     
     // Toggle active status for the whole profile instead, or do nothing
     girl.isActive = !girl.isActive;
-    await girl.save();
+    await girl.save({ validateModifiedOnly: true });
     return { isActive: girl.isActive };
   },
 

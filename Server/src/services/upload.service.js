@@ -59,6 +59,7 @@ const uploadService = {
    * Upload a profile photo with optimized dimensions.
    */
   async uploadProfilePhoto(buffer, userId) {
+  
     return this.uploadImage(buffer, {
       folder: 'luxdate/profiles',
       publicId: `profile_${userId}_${Date.now()}`,
@@ -98,7 +99,7 @@ const uploadService = {
         {
           folder,
           public_id: publicId,
-          resource_type: 'video',
+          resource_type: 'video', timeout: 600000,
           eager: [
             { format: 'jpg', transformation: [{ width: 400, height: 400, crop: 'fill' }] },
           ],

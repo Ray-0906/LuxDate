@@ -32,7 +32,7 @@ const chatController = {
 
     async deleteConversation(req, res, next) {
     try {
-      await chatService.deleteConversation(req.user._id, req.params.conversationId);
+      await chatService.deleteConversation(req.user._id, req.params.girlId);
       return ApiResponse.success(res, { message: 'Conversation deleted' });
     } catch (e) { next(e); }
   },

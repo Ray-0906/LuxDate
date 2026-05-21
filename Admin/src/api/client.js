@@ -4,8 +4,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 15000,
-  headers: { 'Content-Type': 'application/json' },
+  timeout: 600000, // Increased to 10 mins strictly for media uploads
 });
 
 // Attach token to every request

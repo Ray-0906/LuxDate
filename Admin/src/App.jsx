@@ -44,7 +44,7 @@ export default function App() {
           <Route path="chat" element={<ChatPage />} />
           <Route path="gifts" element={<GiftsPage />} />
           <Route path="coin-packs" element={<CoinPacksPage />} />
-          <Route path="vip" element={<VipPage />} />
+          {/* <Route path="vip" element={<VipPage />} /> */}
           <Route path="calls" element={<CallsPage />} />
           <Route path="payments" element={<PaymentsPage />} />
           <Route path="settings" element={<SettingsPage />} />

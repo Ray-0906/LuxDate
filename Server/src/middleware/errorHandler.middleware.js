@@ -13,6 +13,7 @@ const errorHandler = (err, req, res, next) => {
       field: e.path,
       message: e.message,
     }));
+    console.log("Validation errors:", err);
     return res.status(400).json({
       success: false,
       message: 'Validation failed',

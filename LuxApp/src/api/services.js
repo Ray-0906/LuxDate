@@ -29,7 +29,7 @@ export const chatApi = {
   send: (girlId, data) => api.post(`/chat/${girlId}/send`, data),
   clearAll: () => api.delete('/chat/clear-all'),
   clearCalls: () => api.delete('/chat/calls/clear'),
-  clearConversation: (conversationId) => api.delete(`/chat/conversation/${conversationId}`),
+  clearConversation: (girlId) => api.delete(`/chat/conversation/${girlId}`),
 };
 
 export const mediaApi = {

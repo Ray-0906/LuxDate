@@ -19,12 +19,12 @@ export const usersApi = {
 export const girlsApi = {
   list: (params) => api.get('/admin/girls', { params }),
   getById: (id) => api.get(`/admin/girls/${id}`),
-  create: (formData) => api.post('/admin/girls', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  create: (formData) => api.post('/admin/girls', formData),
   update: (id, data) => api.put(`/admin/girls/${id}`, data),
-  updatePhoto: (id, formData) => api.patch(`/admin/girls/${id}/photo`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  addPhotos: (id, formData) => api.post(`/admin/girls/${id}/photos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  updatePhoto: (id, formData) => api.patch(`/admin/girls/${id}/photo`, formData),
+  addPhotos: (id, formData) => api.post(`/admin/girls/${id}/photos`, formData),
   delete: (id) => api.delete(`/admin/girls/${id}`),
-  uploadVideo: (id, formData) => api.post(`/admin/girls/${id}/videos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  uploadVideo: (id, formData) => api.post(`/admin/girls/${id}/videos`, formData),
   listVideos: (id, params) => api.get(`/admin/girls/${id}/videos`, { params }),
   deleteVideo: (id) => api.delete(`/admin/girls/videos/${id}`),
 };
