@@ -61,7 +61,7 @@ export const paymentVerifyLimiter = rateLimit({
 /** Rolling 24h window — approximates “per day” cap */
 export const checkinClaimLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
-  max: 3,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.user?._id?.toString() || req.ip,

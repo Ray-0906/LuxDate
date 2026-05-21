@@ -1,0 +1,1029 @@
+LUXDATE ANDROID UI MAP
+Version: current code scan
+Source app: LuxApp
+Platform focus: Android
+Purpose: current-state screen inventory, content map, and navigation flow for UI planning
+
+==================================================
+1. ROOT APP FLOW
+==================================================
+
+1. App shell
+- `App.jsx` mounts `AppNavigator` inside gesture + safe-area providers.
+- If user is not authenticated: auth stack is shown.
+- If authenticated but profile has no `name`: onboarding screen is forced.
+- If authenticated and onboarded: main app stack is shown.
+- Incoming calls can interrupt and open `IncomingCall` globally.
+
+2. Top-level navigator structure
+- Auth stack:
+  - `Login`
+  - `Otp`
+  - `Onboard`
+- Main app tabs:
+  - `ForYou`
+  - `Chat`
+  - `Me`
+- Extra stack screens above tabs:
+  - `GirlProfile`
+  - `Conversation`
+  - `CallHistory`
+  - `IncomingCall`
+  - `OutgoingCall`
+  - `VideoCall`
+  - `Wallet`
+  - `CoinPack`
+  - `VIPPlans`
+  - `TransactionHistory`
+
+3. First-run / entry flow
+- App launch
+- If logged out -> `Login`
+- `Login` success -> `Otp`
+- `Otp` success:
+  - if backend/store returns a user with `name`, app proceeds into main app
+  - if user has no `name`, app shows `Onboard`
+- `Onboard` success -> main app stack -> `MainTabs` -> usually lands in `ForYou`
+
+4. Main app tab flow
+- `ForYou` tab is the discovery/home surface
+- `Chat` tab is inbox
+- `Me` tab is profile/account
+
+5. Important navigation gaps found
+- `ForYouScreen` tries to open `SearchScreen`, but `SearchScreen` is not registered in `AppNavigator`.
+- There is no separate dedicated "Welcome" screen route. The current `Login` screen acts as both welcome and login entry.
+
+==================================================
+2. GLOBAL VISUAL LANGUAGE
+==================================================
+
+1. Overall look
+- Dark UI throughout.
+- Neon/cyber-luxury style.
+- Strong use of magenta, cyan, violet, gold accents.
+- Rounded corners everywhere.
+- Most screens use black or near-black backgrounds.
+- Several auth screens use a soft mesh glow background.
+
+2. Core recurring UI patterns
+- Rounded icon buttons with dark tertiary backgrounds.
+- High-contrast headers with bold text.
+- Magenta primary CTA buttons.
+- Cyan secondary emphasis in some auth and wallet areas.
+- Modals and sheets for filters, coins, gifts, payment gateways, and confirmations.
+
+3. Tone of copy
+- Mixed tone:
+  - Auth screens use stylized cyber-luxury copy.
+  - Main app uses more direct product copy.
+  - Some screens still contain placeholder or rough copy.
+
+==================================================
+3. SCREEN-BY-SCREEN DETAILS
+==================================================
+
+--------------------------------------------------
+SCREEN: LOGIN
+Route: `Login`
+Role: welcome + phone entry
+--------------------------------------------------
+
+Current look
+- Full-screen dark background with two large soft neon mesh glows.
+- Centered layout.
+- Square logo card with `LX`.
+- Large glowing `LuxDate` title.
+- Small uppercase subtitle.
+- Single phone-input row with `+91` prefix.
+- Large glowing magenta CTA button.
+
+Visible content
+- Logo text: `LX`
+- App title: `LuxDate`
+- Subtitle: `Enter the neon grid.`
+- Phone placeholder: `000 000 0000`
+- CTA loading state: `TRANSMITTING...`
+- CTA normal state: `INITIALIZE LINK`
+- Footer/legal text:
+  - `BY CONTINUING, YOU AGREE TO OUR TERMS OF SERVICE AND PRIVACY PROTOCOLS.`
+- Error box shows auth/store error text when present.
+
+What the page does
+- User enters 10-digit phone number.
+- On CTA tap, app sends OTP.
+- If success, navigates to `Otp` with the phone number in params.
+
+Flow
+- Comes from: app launch when logged out
+- Goes to: `Otp`
+
+Notes
+- This is effectively your current welcome screen.
+- There is no standalone marketing intro before it.
+
+--------------------------------------------------
+SCREEN: OTP
+Route: `Otp`
+Role: OTP verification
+--------------------------------------------------
+
+Current look
+- Same mesh neon background family as login.
+- Centered title and subtitle.
+- Six single-character OTP boxes in one row with a visual middle gap.
+- Cyan-themed confirmation button.
+
+Visible content
+- Title: `SECURITY CHECK`
+- Subtitle: `Enter transmission code sent to +91 {phone}`
+- CTA loading state: `VERIFYING...`
+- CTA normal state: `CONFIRM ACCESS`
+- Error box shows auth/store error text when present.
+
+What the page does
+- User enters 6-digit OTP.
+- On verify, store handles auth state.
+- Navigation after success is indirect through auth state:
+  - onboarded user -> main app
+  - non-onboarded user -> `Onboard`
+
+Flow
+- Comes from: `Login`
+- Goes to:
+  - `Onboard` if profile incomplete
+  - main app if profile already complete
+
+--------------------------------------------------
+SCREEN: ONBOARD
+Route: `Onboard`
+Role: profile completion
+--------------------------------------------------
+
+Current look
+- Full-screen dark background with mesh glow.
+- Simple centered form.
+- Much less flashy than login/OTP.
+- Plain text heading with glass-style inputs and gender chips.
+
+Visible content
+- Title: `Welcome to LuxDate`
+- Subtitle: `Curated matching for the elite.`
+- Field label: `Your Name`
+- Name placeholder: `e.g. Alexander`
+- Field label: `Age`
+- Age placeholder: `Must be 18+`
+- Field label: `I identify as`
+- Gender options:
+  - `Male`
+  - `Female`
+  - `Other`
+- CTA loading state: `Creating Profile...`
+- CTA normal state: `Enter the Club`
+
+What the page does
+- Collects name, age, gender.
+- Submit calls onboarding store action.
+- After success, auth/onboarding state pushes user into the main app.
+
+Flow
+- Comes from:
+  - `Otp` for new/incomplete user
+  - forced onboarding path for authenticated user without `name`
+- Goes to: main app tabs
+
+Notes
+- This is the only profile-completion screen currently.
+- No photo, preferences, interests, location, or profile preview in this flow.
+
+--------------------------------------------------
+SCREEN: FOR YOU
+Route: `ForYou` tab
+Role: main discovery home
+--------------------------------------------------
+
+Current look
+- Dark page with compact top header.
+- `LuxDate` wordmark at top left.
+- Search and filter circular icon buttons on right.
+- Simple two-tab segmented header:
+  - `Hot`
+  - `Nearby`
+- Feed content fills rest of screen.
+
+Visible content
+- Header logo: `LuxDate` with colored `Date`
+- Tabs:
+  - `Hot`
+  - `Nearby`
+- Filter icon changes visually when filters are active.
+
+What the page does
+- Switches between `HotFeed` and `NearbyFeed`.
+- Opens `GirlProfile` when a card is tapped.
+- Opens filter sheet.
+- Attempts to open `SearchScreen` from search icon.
+
+Flow
+- Comes from: main tabs default/home
+- Goes to:
+  - `GirlProfile`
+  - filter sheet modal
+  - broken `SearchScreen` path
+
+Notes
+- The missing search route is a real UX hole.
+
+--------------------------------------------------
+SCREEN: HOT FEED
+Embedded inside: `ForYou`
+Role: filtered discovery grid
+--------------------------------------------------
+
+Current look
+- Two-column masonry-like card grid.
+- Large image cards with dark bottom gradient.
+- Profile name and age over image.
+- Location row under name.
+- Optional top-right charm badge.
+
+Visible content per card
+- `{name}, {age}`
+- Location text from `location` or `region`
+- Charm badge if `charmLevel > 1`
+- Empty state:
+  - `No profiles found`
+  - `Pull down to refresh`
+
+What the page does
+- Loads `/feed/hot`.
+- Applies optional `region` and `language` filters.
+- Pull-to-refresh supported.
+- Tap card -> `GirlProfile`
+
+Flow
+- Comes from: `ForYou` with `Hot` selected
+- Goes to: `GirlProfile`
+
+--------------------------------------------------
+SCREEN: NEARBY FEED
+Embedded inside: `ForYou`
+Role: nearby discovery grid
+--------------------------------------------------
+
+Current look
+- Same visual structure as Hot feed.
+- Uses distance emphasis instead of location emphasis.
+
+Visible content per card
+- `{name}, {age}`
+- Distance row:
+  - `{distanceKm} km`
+  - or `Near you`
+- Empty state:
+  - `No nearby profiles`
+
+What the page does
+- Loads `/feed/nearby`.
+- Pull-to-refresh supported.
+- Tap card -> `GirlProfile`
+
+Flow
+- Comes from: `ForYou` with `Nearby` selected
+- Goes to: `GirlProfile`
+
+--------------------------------------------------
+SCREEN: FILTER SHEET
+Modal from: `ForYou`
+Role: discovery filters
+--------------------------------------------------
+
+Current look
+- Bottom sheet modal.
+- Rounded top corners.
+- Drag handle.
+- Horizontal chip rows.
+
+Visible content
+- Title: `Filters`
+- Action: `Reset`
+- Section: `Region`
+- Region chips:
+  - `All`
+  - `India`
+  - `Philippines`
+  - `Indonesia`
+  - `Vietnam`
+  - `Global`
+- Section: `Language`
+- Language chips:
+  - `All`
+  - `Hindi`
+  - `English`
+  - `Bengali`
+  - `Tamil`
+  - `Telugu`
+- CTA: `Apply Filters`
+
+What the page does
+- Lets user set region/language filters.
+- Applies and closes on submit.
+- Reset sets both to `All`.
+
+Flow
+- Comes from: `ForYou`
+- Goes back to: `ForYou`
+
+--------------------------------------------------
+SCREEN: GIRL PROFILE
+Route: `GirlProfile`
+Role: profile detail and action hub
+--------------------------------------------------
+
+Current look
+- Large hero photo at top.
+- Overlay gradient on photo.
+- Back button floating over image.
+- Small image counter if multiple photos.
+- Rich scrollable detail page with multiple sections and sticky footer actions.
+
+Visible content
+- Name
+- ID line: `ID: {last 8 chars of profile id}`
+- Badge row:
+  - `Active`
+  - `Lv{level}`
+  - location
+  - language
+  - age
+- Section: `Self-introduction`
+  - bio text
+  - `Read more` link if long/default
+- Section: `Connections`
+  - relationship cards for slot types returned by backend
+  - status text like:
+    - `You are connected`
+    - `Waiting for someone`
+    - `In use with {name}`
+  - footer text like:
+    - `{cost} coins`
+    - `Tap to switch`
+    - `Tap to manage`
+- Section: `Speaking Language`
+  - language badges
+- Section: `Honor / Charm`
+  - `Charm Level: {girl.charmLevel || Rising}`
+- Section: `Gifts`
+  - inline CTA: `Send Gift`
+  - gift grid or empty text:
+    - `No gifts yet. Be first one.`
+- Sticky footer buttons:
+  - `Message`
+  - `Gift`
+  - `Video Call`
+
+What the page does
+- Fetches full girl profile and relationship options.
+- Tap `Message` -> `Conversation`
+- Tap `Gift` -> gift picker
+- Tap `Video Call` -> `OutgoingCall`
+- Connection cards open request/switch/break flows via modals.
+- Can trigger insufficient-coins modal and coin purchase sheet.
+
+Flow
+- Comes from:
+  - `HotFeed`
+  - `NearbyFeed`
+  - `Profile` -> My Connections
+  - relationship engine navigation
+- Goes to:
+  - `Conversation`
+  - `OutgoingCall`
+  - wallet/coin purchase overlays
+
+Notes
+- This is one of the densest screens in the app.
+- Several relationship flows live here through modal overlays rather than separate pages.
+
+--------------------------------------------------
+SCREEN: CHAT INBOX
+Route: `Chat` tab
+Role: conversation list
+--------------------------------------------------
+
+Current look
+- Dark list page with simple top header.
+- `Chat` title on left.
+- Call-history icon on right.
+- Each row is avatar + name + preview + date + unread badge.
+
+Visible content
+- Header title: `Chat`
+- Empty state:
+  - icon
+  - `No conversations yet`
+  - `Start chatting from the For You tab`
+- Per conversation:
+  - girl name
+  - last message preview
+  - formatted date
+  - unread badge number
+
+What the page does
+- Loads inbox from backend.
+- Refreshes on focus and socket events.
+- Tap row -> `Conversation`
+- Tap call icon -> `CallHistory`
+
+Flow
+- Comes from: main tabs
+- Goes to:
+  - `Conversation`
+  - `CallHistory`
+
+--------------------------------------------------
+SCREEN: CONVERSATION
+Route: `Conversation`
+Role: 1:1 chat thread
+--------------------------------------------------
+
+Current look
+- Dark chat screen with custom top bar.
+- Back button, profile thumbnail, name, `Active now`.
+- Header action buttons for call, delete, and video call.
+- Inverted message list style.
+- Rich composer area with support for text, emoji, attachments, gifts, and coin prompts.
+
+Visible content
+- Header:
+  - girl name
+  - status: `Active now`
+- Message types shown:
+  - plain text
+  - photo messages
+  - gift messages
+  - relationship event cards
+- Relationship event card headings:
+  - `Bond Ended`
+  - `Relationship Update`
+- Delete confirmation modal includes:
+  - `Delete Conversation?`
+- Coin-related prompts can appear through `InsufficientCoinsModal` and `CoinPackSheet`
+
+What the page does
+- Loads message history.
+- Receives live messages and typing events via socket.
+- Sends text messages.
+- Supports camera/gallery image send.
+- Supports emoji keyboard.
+- Supports gifts.
+- Supports delete conversation.
+- Video-call action -> `OutgoingCall`
+- Wallet/coin purchase overlays can appear when user lacks coins for gifts.
+
+Flow
+- Comes from:
+  - `Inbox`
+  - `GirlProfile`
+- Goes to:
+  - back to previous screen
+  - `OutgoingCall`
+  - `Wallet` or coin buy overlay paths
+
+Notes
+- This is a feature-rich messaging surface, not just a basic thread screen.
+
+--------------------------------------------------
+SCREEN: CALL HISTORY
+Route: `CallHistory`
+Role: call log list
+--------------------------------------------------
+
+Current look
+- Full dark list screen.
+- Header with back, title, trash icon.
+- Flat list of call rows.
+- Each row shows avatar, girl name, call status, optional duration, and relative time.
+
+Visible content
+- Header title: `Call History`
+- Clear modal:
+  - `Clear Call History?`
+  - `This will remove all call logs permanently.`
+  - actions: `Cancel`, `Clear`
+- Empty state:
+  - `No call history yet`
+- Status labels depend on backend values like:
+  - `Missed`
+  - `Rejected`
+  - `Accepted • mm:ss`
+
+What the page does
+- Loads paginated call history.
+- Pull-to-refresh.
+- Infinite scroll/pagination.
+- Trash clears all history.
+
+Flow
+- Comes from: `Inbox`
+- Goes back to: previous screen
+
+--------------------------------------------------
+SCREEN: INCOMING CALL
+Route: `IncomingCall`
+Role: full-screen incoming video-call prompt
+--------------------------------------------------
+
+Current look
+- Full-screen blurred photo background.
+- Dark overlay.
+- Centered large caller avatar with pulsing ring.
+- Two large circular actions at bottom: decline and accept.
+- Minimal text labels beneath buttons.
+
+Visible content
+- Caller name
+- Status text: `Incoming Video Call...`
+- Labels:
+  - `Decline`
+  - `Accept`
+
+What the page does
+- Vibrates on incoming call.
+- Auto-misses after 30 seconds.
+- Accept:
+  - hits call accept API
+  - if successful -> `VideoCall`
+  - if insufficient coins -> coin pack sheet
+- Decline -> ends call and closes
+- Miss -> ends call and closes
+
+Flow
+- Comes from: global trigger/navigation interrupt
+- Goes to:
+  - `VideoCall`
+  - closes back out on decline/miss
+
+--------------------------------------------------
+SCREEN: OUTGOING CALL
+Route: `OutgoingCall`
+Role: calling / connection attempt
+--------------------------------------------------
+
+Current look
+- Full-screen blurred background using girl photo.
+- Large animated pulsing ring around avatar.
+- Single red hang-up button at bottom.
+- Minimal cinematic presentation.
+
+Visible content
+- Girl name
+- Status text changes:
+  - `Calling...`
+  - `Connecting...`
+  - `Need more coins to connect.`
+  - `Failed to connect or insufficient coins.`
+
+What the page does
+- Simulates ringing delay, then tries to connect.
+- On success -> `VideoCall`
+- On insufficient coins -> coin pack sheet
+- On failure -> temporary error state then back
+- Hang up -> back
+
+Flow
+- Comes from:
+  - `GirlProfile`
+  - `Conversation`
+- Goes to:
+  - `VideoCall`
+  - back
+
+--------------------------------------------------
+SCREEN: VIDEO CALL
+Route: `VideoCall`
+Role: active call screen
+--------------------------------------------------
+
+Current look
+- Full-screen remote video if available, otherwise blurred placeholder image.
+- Small top bar with caller identity and timer.
+- Local camera picture-in-picture in top-right if camera permission/device available.
+- Bottom floating control row.
+
+Visible content
+- Top bar:
+  - girl avatar
+  - girl name
+  - timer `mm:ss`
+- Placeholder state:
+  - `Connecting...`
+  - or `No Video`
+- Controls:
+  - mute/unmute remote audio
+  - mute/unmute mic
+  - enable/disable local camera
+  - end call
+  - gift
+- Temporary overlays:
+  - live text reaction overlay from incoming auto messages
+  - wealth-level toast like `Wealth Level X!`
+  - gift burst overlay
+
+What the page does
+- Plays remote video loop or placeholder.
+- Tracks elapsed time.
+- Enforces free-call time cap or paid-call balance cap.
+- End call updates backend and profile balance.
+- If ending balance is too low, routes user into `Me` tab with top-up nudge.
+- Gift flow can trigger insufficient-coins modal and coin sheet.
+
+Flow
+- Comes from:
+  - `IncomingCall`
+  - `OutgoingCall`
+- Goes to:
+  - back
+  - `MainTabs` -> `Me` with post-call top-up hint
+  - `Inbox` fallback in some cases
+
+--------------------------------------------------
+SCREEN: PROFILE / ME
+Route: `Me` tab
+Role: user profile, wallet entry, VIP entry, relationship summary
+--------------------------------------------------
+
+Current look
+- Scrollable dark account page.
+- Avatar-centered top card.
+- Stats card.
+- Optional daily-checkin card for non-VIP.
+- Optional VIP banner for VIP user.
+- Connection mini-cards.
+- Menu list and logout button.
+
+Visible content
+- Optional post-call nudge:
+  - `You're out of coins - top up to keep calling.`
+  - or `Only {balance} coins left - not enough for 2 more minutes.`
+- User card:
+  - user name
+  - optional VIP badge chip
+  - age / gender / location line
+  - `Level {wealthLevel}`
+- Non-VIP check-in card:
+  - `Daily check-in`
+  - `Claim {coinsIfClaim} coins today`
+  - button: `Claim`
+- Stats:
+  - `Coins`
+  - `Points`
+  - `Recharge`
+- VIP banner:
+  - `VIP Active`
+- Connections section:
+  - `My Connections`
+  - each mini-card shows relationship type and state
+  - footnote: `Long press an active card to break bond.`
+- Menu:
+  - `Wallet`
+  - `VIP Plans`
+  - `Transactions`
+- Logout:
+  - `Logout`
+
+What the page does
+- Refreshes profile, check-in status, VIP status, and connection data on focus.
+- Daily check-in claim for non-VIP users.
+- Recharge opens `CoinPack`.
+- Menu opens wallet/VIP/transactions.
+- Connection cards can open `GirlProfile`.
+- Long press active connection -> break bond alert.
+- Logout clears auth state.
+
+Flow
+- Comes from: main tabs
+- Goes to:
+  - `CoinPack`
+  - `Wallet`
+  - `VIPPlans`
+  - `TransactionHistory`
+  - `GirlProfile`
+  - logged-out auth flow on logout
+
+--------------------------------------------------
+SCREEN: WALLET
+Route: `Wallet`
+Role: simple balance page
+--------------------------------------------------
+
+Current look
+- Very minimal screen.
+- Basic top header with back button.
+- One large centered card.
+
+Visible content
+- Header title: `Wallet`
+- Card label: `Coin balance`
+- Numeric balance
+- Button: `Buy coins`
+- Secondary action: `Transaction history`
+
+What the page does
+- Shows current coin balance from auth store.
+- Buy coins -> `CoinPack`
+- Transaction history -> `TransactionHistory`
+
+Flow
+- Comes from: `Profile`
+- Goes to:
+  - `CoinPack`
+  - `TransactionHistory`
+
+--------------------------------------------------
+SCREEN: COIN PACK
+Route: `CoinPack`
+Role: coin purchase modal sheet
+--------------------------------------------------
+
+Current look
+- Transparent dark overlay with a large rounded bottom sheet.
+- Two-step purchase flow inside one surface.
+- Step 1: pack grid
+- Step 2: payment gateway picker
+
+Visible content
+- Header title: `Make video calls with Coins`
+- Subtitle on package step: `Call beauties with Coins`
+- Package cards show:
+  - diamond icon
+  - coin amount
+  - price
+  - optional badge like `{discount}% off`
+- Footer text:
+  - `My Coins: {balance}`
+- Footer CTA:
+  - `Continue`
+  - `Loading payment methods...`
+  - `Processing...`
+- Gateway step summary:
+  - selected coin amount
+  - selected price
+- Gateway row label:
+  - gateway name
+  - mock label shown as `Test pay (mock - no real charge)`
+
+What the page does
+- Loads wallet-context coin packs.
+- Step 1 select pack.
+- Step 2 select payment method if multiple gateways exist.
+- Runs checkout/verification flow.
+- On success refreshes profile and shows success alert.
+
+Flow
+- Comes from:
+  - `Profile`
+  - `Wallet`
+  - insufficient-coins flows in multiple screens
+- Goes back to:
+  - previous screen after close
+  - may continue same parent flow after success
+
+Notes
+- This is presented as a transparent modal, not a full standard screen.
+
+--------------------------------------------------
+SCREEN: VIP PLANS
+Route: `VIPPlans`
+Role: VIP catalogue, purchase, and VIP day-claiming
+--------------------------------------------------
+
+Current look
+- Large stylized premium sales screen.
+- Horizontal top plan tabs.
+- Horizontal pager for each plan.
+- Big hero card with themed background.
+- Benefits row.
+- Daily reward grid.
+- Sticky bottom CTA.
+
+Visible content
+- Header title: active plan name or `VIP Membership`
+- Active purchased banner:
+  - `Plan Purchased ({remainingCheckins} claims left)`
+- Hero card content:
+  - plan name
+  - `Get`
+  - total coins
+  - `by paying`
+  - plan price
+- Timer block with hardcoded digits:
+  - `11 : 30 : 17 : 52`
+- Tip text:
+  - `Normal Recharge ≈ {price}`
+  - `{durationDays} Day Card = {totalCoins} + privileges`
+- Benefits:
+  - `Instant Reward`
+  - `Daily Check-in ({durationDays}d)`
+  - `Extra Reward`
+  - `VIP Frame`
+- Schedule header: `Get schedule`
+- Day cards show:
+  - `1st`, `2nd`, `3rd`, etc.
+  - `x{coins}`
+- Empty state:
+  - `No valid VIP plans available`
+  - `Plans will appear here after valid rewards and schedules are published.`
+- Bottom CTA:
+  - `Purchased`
+  - or price text like `₹{price}`
+  - optional fake price
+  - optional badge `{discount}% OFF`
+
+What the page does
+- Loads VIP status and plan catalogue.
+- Lets user swipe/select plans.
+- Purchased plan cards unlock per-day reward claiming.
+- Tapping an unlocked unclaimed day calls VIP check-in claim for that specific day.
+- Buying a non-owned plan triggers payment gateway selection and VIP checkout flow.
+
+Flow
+- Comes from: `Profile`
+- Goes back to: previous screen
+
+Notes
+- This is both a marketing screen and a functional reward-claim screen.
+- The countdown shown in hero is currently static, not a real timer.
+
+--------------------------------------------------
+SCREEN: TRANSACTION HISTORY
+Route: `TransactionHistory`
+Role: coin transaction list
+--------------------------------------------------
+
+Current look
+- Dark list page with simple header.
+- Each transaction row is a rounded block with type/note on left and amount on right.
+
+Visible content
+- Header title: `Transactions`
+- Per row:
+  - `type`
+  - `note`
+  - amount with `+` or negative value
+- Empty state:
+  - `No transactions yet.`
+
+What the page does
+- Loads up to 50 coin transactions.
+- Back returns to previous screen.
+
+Flow
+- Comes from:
+  - `Profile`
+  - `Wallet`
+- Goes back to previous screen
+
+==================================================
+4. SHARED OVERLAYS / SECONDARY SURFACES
+==================================================
+
+1. Gift picker modal
+- Used in `GirlProfile`, `Conversation`, `VideoCall`.
+- Opens catalog for gifting.
+- Can trigger gift burst overlay or insufficient-coins flow.
+
+2. Insufficient coins modal
+- Used in relationship, gift, and call flows.
+- Offers `Buy coins` or wallet path depending on handler.
+
+3. Coin pack sheet component
+- Secondary coin purchase overlay used inside several screens besides main `CoinPack`.
+- Common contexts:
+  - `call`
+  - `wallet`
+
+4. Mock payment confirm modal
+- Used in coin/VIP purchase flows for mock gateway.
+
+==================================================
+5. END-TO-END USER FLOWS
+==================================================
+
+1. New user auth flow
+- Launch
+- `Login`
+- `Otp`
+- `Onboard`
+- `ForYou`
+
+2. Returning user auth flow
+- Launch
+- `Login`
+- `Otp`
+- `ForYou`
+
+3. Discovery to conversation flow
+- `ForYou`
+- tap profile card
+- `GirlProfile`
+- tap `Message`
+- `Conversation`
+
+4. Discovery to video call flow
+- `ForYou`
+- tap profile card
+- `GirlProfile`
+- tap `Video Call`
+- `OutgoingCall`
+- `VideoCall`
+
+5. Inbox to call history flow
+- `Chat`
+- tap call icon
+- `CallHistory`
+
+6. Profile monetization flow
+- `Me`
+- `Wallet`
+- `CoinPack`
+
+7. VIP flow
+- `Me`
+- `VIPPlans`
+- buy plan
+- return to same screen with `Purchased` state
+- tap unlocked day reward cells to claim
+
+8. Post-call top-up recovery flow
+- `VideoCall` ends
+- app detects low balance
+- routes to `MainTabs` -> `Me`
+- nudge card opens `CoinPack`
+
+==================================================
+6. CURRENT UX OBSERVATIONS
+==================================================
+
+1. The app has three distinct visual modes
+- Auth screens: neon editorial
+- Core product screens: practical dark product UI
+- VIP screens: louder sales/promo style
+
+2. Strongest current screens
+- `Login`
+- `GirlProfile`
+- `VIPPlans`
+- `VideoCall`
+
+3. Simplest / sparsest screens
+- `Wallet`
+- `TransactionHistory`
+- `CallHistory`
+
+4. Navigation inconsistency
+- Some destinations are full screens.
+- Some are transparent modal sheets.
+- Some feature flows are embedded in overlays rather than routes.
+
+5. Broken/incomplete path
+- `SearchScreen` is referenced but not implemented in navigation.
+
+6. Placeholder / rough content still present
+- Some fallback copy is generic.
+- VIP hero timer is hardcoded.
+- Some sections still have placeholder-like text and simplified visuals.
+
+==================================================
+7. SCREEN LIST SUMMARY
+==================================================
+
+Registered route screens
+- `Login`
+- `Otp`
+- `Onboard`
+- `ForYou`
+- `Chat` (`InboxScreen`)
+- `Me` (`ProfileScreen`)
+- `GirlProfile`
+- `Conversation`
+- `CallHistory`
+- `IncomingCall`
+- `OutgoingCall`
+- `VideoCall`
+- `Wallet`
+- `CoinPack`
+- `VIPPlans`
+- `TransactionHistory`
+
+Important embedded surfaces
+- `HotFeed`
+- `NearbyFeed`
+- `FilterSheet`
+- gift picker
+- insufficient coins modal
+- coin pack sheet
+- payment gateway modal
+- mock payment modal
+
+END OF FILE
