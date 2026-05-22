@@ -43,6 +43,8 @@ export const onboardingSchema = {
   body: Joi.object({
     name: Joi.string().trim().min(1).max(50).optional(),
     age: Joi.number().integer().min(18).max(100).required(),
-    language: Joi.string().valid('en', 'hi', 'bn').optional(),
+    gender: Joi.string().valid('male', 'female', 'other').optional(),
+    language: Joi.string().valid('English', 'Hindi', 'Bengali').optional(),
+    username: Joi.string().trim().min(3).max(30).optional(),
   }),
 };

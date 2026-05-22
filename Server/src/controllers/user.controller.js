@@ -1,4 +1,5 @@
 import userService from '../services/user.service.js';
+import uploadService from '../services/upload.service.js';
 import ApiResponse from '../utils/response.js';
 
 const userController = {
@@ -18,7 +19,11 @@ const userController = {
 
   async uploadPhoto(req, res, next) {
     try {
-      const photoUrl = req.body.photoUrl || req.file?.location;
+      let photoUrl = req.body.photoUrl || null;
+      if (!photoUrl && req.file?.buffer) {
+        const upload = await uploadService.uploadProfilePhoto(req.file.buffer, req.user._id);
+        photoUrl = upload.url;
+      }
       if (!photoUrl) return ApiResponse.error(res, { message: 'No photo URL', statusCode: 400 });
       const user = await userService.uploadPhoto(req.user._id, photoUrl);
       return ApiResponse.success(res, { data: user, message: 'Photo updated' });

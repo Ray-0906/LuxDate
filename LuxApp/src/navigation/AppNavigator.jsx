@@ -29,6 +29,7 @@ import WalletScreen from '../screens/Me/WalletScreen.jsx';
 import CoinPackScreen from '../screens/Me/CoinPackScreen.jsx';
 import VIPPlansScreen from '../screens/Me/VIPPlansScreen.jsx';
 import TransactionHistoryScreen from '../screens/Me/TransactionHistoryScreen.jsx';
+import EditProfileScreen from '../screens/Me/EditProfileScreen.jsx';
 
 export const navigationRef = createNavigationContainerRef();
 
@@ -155,6 +156,11 @@ function AppStack() {
       <Stack.Screen
         name="TransactionHistory"
         component={TransactionHistoryScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
         options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>

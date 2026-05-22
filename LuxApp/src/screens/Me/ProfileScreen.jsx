@@ -129,6 +129,20 @@ export default function ProfileScreen({ navigation }) {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <View style={styles.topBar}>
+          <View>
+            <Text style={styles.topBarEyebrow}>MY SPACE</Text>
+            <Text style={styles.topBarTitle}>Profile</Text>
+          </View>
+          <Pressable
+            style={styles.editBtn}
+            onPress={() => navigation.navigate('EditProfile', { startInEditMode: true })}
+            hitSlop={12}
+          >
+            <Ionicons name="create-outline" size={18} color={theme.colors.textPrimary} />
+          </Pressable>
+        </View>
+
         {postNudge ? (
           <Pressable
             style={styles.nudge}
@@ -345,6 +359,37 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
   scroll: { paddingHorizontal: 20 },
+  topBar: {
+    marginTop: 10,
+    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  topBarEyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.8,
+    color: theme.colors.textMuted,
+    fontFamily: theme.typography.fontBody,
+  },
+  topBarTitle: {
+    marginTop: 2,
+    fontSize: 28,
+    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontDisplay,
+  },
+  editBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
+  },
   nudge: {
     flexDirection: 'row',
     alignItems: 'center',

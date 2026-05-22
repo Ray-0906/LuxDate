@@ -8,7 +8,16 @@ const userService = {
   },
 
   async updateProfile(userId, data) {
-    const allowed = ['name', 'username', 'age', 'gender', 'location', 'profilePhotoUrl'];
+    const allowed = [
+      'name',
+      'username',
+      'age',
+      'gender',
+      'bio',
+      'language',
+      'location',
+      'profilePhotoUrl',
+    ];
     const update = {};
     for (const key of allowed) {
       if (data[key] !== undefined) update[key] = data[key];

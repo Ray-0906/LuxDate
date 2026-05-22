@@ -7,7 +7,9 @@ const userSchema = new mongoose.Schema(
     username: { type: String, trim: true, default: '' },
     name: { type: String, trim: true, default: '' },
     age: { type: Number, min: 18 },
-    gender: { type: String, enum: ['male', 'female'], default: 'male' },
+    gender: { type: String, enum: ['male', 'female', 'other'], default: 'male' },
+    bio: { type: String, default: '', maxlength: 500 },
+    language: { type: String, default: 'English' },
     location: { type: String, default: '' },
     profilePhotoUrl: { type: String, default: '' },
 
