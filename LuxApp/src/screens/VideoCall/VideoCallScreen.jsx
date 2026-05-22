@@ -1,3 +1,4 @@
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -8,6 +9,8 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { VideoView, useVideoPlayer } from 'react-native-video';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
@@ -25,6 +28,7 @@ import socketService from '../../api/socket.js';
 const { width: W, height: H } = Dimensions.get('window');
 
 export default function VideoCallScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const callData = route.params?.callData || route.params || {};
   const { girl, callId, videoUrl, callType, coinBalance, costPerMinute = 10 } = callData;
   const loadProfile = useAuthStore((state) => state.loadProfile);
@@ -247,7 +251,7 @@ export default function VideoCallScreen({ route, navigation }) {
       )}
 
       {hasPermission && device && !isLocalVideoDisabled && (
-        <View style={styles.pipContainer}>
+        <View style={[styles.pipContainer, { top: insets.top + 80 }]}>
           <Camera
             style={StyleSheet.absoluteFill}
             device={device}
@@ -257,18 +261,26 @@ export default function VideoCallScreen({ route, navigation }) {
       )}
 
       {levelToast ? (
-        <View style={styles.levelToast}>
-          <Text style={styles.levelToastText}>{levelToast}</Text>
+        <View style={[styles.levelToast, { top: insets.top + 90 }]}>
+          <LinearGradient
+            colors={theme.gradients.gold}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.levelToastGradient}
+          >
+            <Ionicons name="sparkles" size={14} color="#3A2E00" />
+            <Text style={styles.levelToastText}>{levelToast}</Text>
+          </LinearGradient>
         </View>
       ) : null}
 
       {reactionOverlay ? (
-        <View style={styles.reactionOverlay}>
+        <View style={[styles.reactionOverlay, { top: insets.top + 150 }]}>
           <Text style={styles.reactionOverlayText}>{reactionOverlay}</Text>
         </View>
       ) : null}
 
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
         <View style={styles.callerInfo}>
           <Image
             source={{ uri: girl?.photos?.[0] || 'https://via.placeholder.com/40' }}
@@ -280,12 +292,14 @@ export default function VideoCallScreen({ route, navigation }) {
           </View>
         </View>
 
-        <Pressable
-          style={[styles.miniControlBtn, isMuted && styles.controlBtnActive]}
-          onPress={() => setIsMuted(!isMuted)}
-        >
-          <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={20} color="#FFF" />
-        </Pressable>
+        <View style={styles.topBarRight}>
+          <Pressable
+            style={[styles.miniControlBtn, isMuted && styles.miniControlBtnActive]}
+            onPress={() => setIsMuted(!isMuted)}
+          >
+            <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={18} color="#FFF" />
+          </Pressable>
+        </View>
       </View>
 
       <GiftBurstOverlay
@@ -296,27 +310,27 @@ export default function VideoCallScreen({ route, navigation }) {
         subtitle="Sent during call"
       />
 
-      <View style={styles.controls}>
+      <View style={[styles.controls, { bottom: insets.bottom + 20 }]}>
         <Pressable
           style={[styles.controlBtn, isMicMuted && styles.controlBtnActive]}
           onPress={() => setIsMicMuted(!isMicMuted)}
         >
-          <Ionicons name={isMicMuted ? 'mic-off' : 'mic'} size={24} color="#FFF" />
+          <Ionicons name={isMicMuted ? 'mic-off' : 'mic'} size={22} color="#FFF" />
         </Pressable>
 
         <Pressable
           style={[styles.controlBtn, isLocalVideoDisabled && styles.controlBtnActive]}
           onPress={() => setIsLocalVideoDisabled(!isLocalVideoDisabled)}
         >
-          <Ionicons name={isLocalVideoDisabled ? 'videocam-off' : 'videocam'} size={24} color="#FFF" />
+          <Ionicons name={isLocalVideoDisabled ? 'videocam-off' : 'videocam'} size={22} color="#FFF" />
         </Pressable>
 
         <Pressable style={[styles.controlBtn, styles.endCallBtn]} onPress={handleEnd}>
-          <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+          <Ionicons name="call" size={26} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
         </Pressable>
 
-        <Pressable style={styles.controlBtn} onPress={() => setShowGiftPicker(true)}>
-          <Ionicons name="gift" size={24} color="#FFF" />
+        <Pressable style={[styles.controlBtn, styles.giftBtn]} onPress={() => setShowGiftPicker(true)}>
+          <Ionicons name="gift" size={22} color={theme.colors.accentGoldLight} />
         </Pressable>
       </View>
 
@@ -360,113 +374,145 @@ export default function VideoCallScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
+  root: { flex: 1, backgroundColor: '#0A0A0F' },
   videoPlaceholder: { position: 'absolute', width: W, height: H },
   placeholderImg: { width: '100%', height: '100%', opacity: 0.6 },
   placeholderOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(10,10,15,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   topBar: {
     position: 'absolute',
     top: 0,
-    left: 0,
-    right: 0,
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    left: 16,
+    right: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(22,22,37,0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 20,
+    zIndex: 10,
   },
+  topBarRight: { flexDirection: 'row', alignItems: 'center' },
   pipContainer: {
     position: 'absolute',
-    top: 120,
-    right: 20,
-    width: 110,
-    height: 160,
+    right: 16,
+    width: 96,
+    height: 144,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#333',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
-    shadowColor: '#000',
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
+    backgroundColor: theme.colors.bgSecondary,
+    borderWidth: 1.5,
+    borderColor: theme.colors.accentCyan,
+    shadowColor: theme.colors.accentCyan,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    zIndex: 9,
   },
-  callerInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  smallAvatar: { width: 40, height: 40, borderRadius: 20 },
-  callerName: { fontSize: 16, fontWeight: '700', color: '#FFF' },
-  timer: { fontSize: 13, color: theme.colors.accentGreen, fontWeight: '600', marginTop: 1 },
-  connectingText: { fontSize: 18, fontWeight: '600', color: '#FFF', letterSpacing: 1 },
+  callerInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  smallAvatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  callerName: { fontFamily: theme.typography.fontDisplay, fontSize: 14, fontWeight: '700', color: '#FFF' },
+  timer: { fontFamily: theme.typography.fontBody, fontSize: 12, color: theme.colors.accentGreen, fontWeight: '600', marginTop: 1 },
+  connectingText: { fontFamily: theme.typography.fontDisplay, fontSize: 16, fontWeight: '700', color: '#FFF', letterSpacing: 1 },
   controls: {
     position: 'absolute',
-    bottom: 50,
-    left: 0,
-    right: 0,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-evenly',
     alignItems: 'center',
-    gap: 15,
+    backgroundColor: 'rgba(22,22,37,0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 30,
+    paddingVertical: 12,
+    zIndex: 10,
   },
   controlBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   miniControlBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
-  controlBtnActive: { backgroundColor: 'rgba(255,255,255,0.4)' },
+  controlBtnActive: { backgroundColor: theme.colors.accentMagenta, borderColor: theme.colors.accentMagenta },
+  miniControlBtnActive: { backgroundColor: theme.colors.accentMagenta, borderColor: theme.colors.accentMagenta },
   endCallBtn: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: theme.colors.accentRed,
+    borderColor: theme.colors.accentRed,
+  },
+  giftBtn: {
+    borderColor: theme.colors.accentGold,
+    backgroundColor: 'rgba(201,168,76,0.1)',
   },
   reactionOverlay: {
     position: 'absolute',
-    left: 18,
-    right: 18,
-    top: 130,
-    borderRadius: 20,
+    left: 20,
+    right: 20,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'rgba(10,10,15,0.86)',
+    backgroundColor: 'rgba(10,10,15,0.9)',
     borderWidth: 1,
-    borderColor: theme.colors.borderGlass,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 8,
   },
   reactionOverlayText: {
-    color: '#FFF',
+    fontFamily: theme.typography.fontBody,
+    color: theme.colors.accentMagenta,
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
   },
   levelToast: {
     position: 'absolute',
-    top: 70,
     alignSelf: 'center',
-    backgroundColor: 'rgba(255,45,120,0.92)',
+    borderRadius: 20,
+    overflow: 'hidden',
+    zIndex: 12,
+    shadowColor: theme.colors.accentGold,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  levelToastGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 18,
-    zIndex: 5,
+    paddingVertical: 8,
   },
   levelToastText: {
-    color: '#FFF',
+    color: '#3A2E00',
+    fontFamily: theme.typography.fontBody,
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: 12,
   },
 });

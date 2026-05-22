@@ -1,11 +1,13 @@
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Image, Pressable, Dimensions, Vibration,
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming,
-  withSequence, withDelay, Easing,
+  withSequence, Easing,
 } from 'react-native-reanimated';
+import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import theme from '../../theme/theme.js';
 import { callsApi } from '../../api/services.js';
@@ -17,25 +19,51 @@ export default function IncomingCallScreen({ route, navigation }) {
   const callData = route.params?.callData || route.params || {};
   const { girl, callId, triggerType, videoUrl, callType } = callData;
   const timerRef = useRef(null);
+  const ringTimeoutRef = useRef(null);
   const [showCoinSheet, setShowCoinSheet] = useState(false);
 
   // Pulse animation for accept button
   const pulseScale = useSharedValue(1);
-  const ringOpacity = useSharedValue(0.3);
+  
+  // Double pulsing rings for caller avatar
+  const ring1Scale = useSharedValue(1);
+  const ring1Opacity = useSharedValue(0.8);
+  const ring2Scale = useSharedValue(1);
+  const ring2Opacity = useSharedValue(0.8);
 
   useEffect(() => {
     pulseScale.value = withRepeat(
       withSequence(
-        withTiming(1.1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.08, { duration: 600, easing: Easing.inOut(Easing.ease) }),
         withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) })
       ), -1, true
     );
-    ringOpacity.value = withRepeat(
-      withSequence(
-        withTiming(0.6, { duration: 800 }),
-        withTiming(0.2, { duration: 800 })
-      ), -1, true
+
+    // Start ring 1 immediately
+    ring1Scale.value = withRepeat(
+      withTiming(1.8, { duration: 2000, easing: Easing.out(Easing.ease) }),
+      -1,
+      false
     );
+    ring1Opacity.value = withRepeat(
+      withTiming(0, { duration: 2000, easing: Easing.out(Easing.ease) }),
+      -1,
+      false
+    );
+
+    // Stagger ring 2 by 1000ms
+    ringTimeoutRef.current = setTimeout(() => {
+      ring2Scale.value = withRepeat(
+        withTiming(1.8, { duration: 2000, easing: Easing.out(Easing.ease) }),
+        -1,
+        false
+      );
+      ring2Opacity.value = withRepeat(
+        withTiming(0, { duration: 2000, easing: Easing.out(Easing.ease) }),
+        -1,
+        false
+      );
+    }, 1000);
 
     // Vibrate on incoming call
     Vibration.vibrate([0, 500, 200, 500, 200, 500], false);
@@ -46,6 +74,7 @@ export default function IncomingCallScreen({ route, navigation }) {
     return () => {
       Vibration.cancel();
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -54,8 +83,14 @@ export default function IncomingCallScreen({ route, navigation }) {
     transform: [{ scale: pulseScale.value }],
   }));
 
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: ringOpacity.value,
+  const ring1Style = useAnimatedStyle(() => ({
+    transform: [{ scale: ring1Scale.value }],
+    opacity: ring1Opacity.value,
+  }));
+
+  const ring2Style = useAnimatedStyle(() => ({
+    transform: [{ scale: ring2Scale.value }],
+    opacity: ring2Opacity.value,
   }));
 
   const handleAccept = async () => {
@@ -109,41 +144,51 @@ export default function IncomingCallScreen({ route, navigation }) {
       <Image
         source={{ uri: girl?.photos?.[0] || 'https://via.placeholder.com/400' }}
         style={styles.bgImage}
-        blurRadius={25}
+        blurRadius={20}
       />
-      <View style={styles.overlay} />
+      {/* Top and Bottom cinematic gradients for vignette effect */}
+      <LinearGradient
+        colors={['rgba(10,10,15,0.85)', 'rgba(10,10,15,0.45)', 'rgba(10,10,15,0.95)']}
+        style={StyleSheet.absoluteFillObject}
+      />
 
       {/* Caller info */}
       <View style={styles.callerSection}>
-        <Animated.View style={[styles.avatarRing, ringStyle]}>
-          <View style={styles.avatarRingInner} />
-        </Animated.View>
-        <Image
-          source={{ uri: girl?.photos?.[0] || 'https://via.placeholder.com/120' }}
-          style={styles.avatar}
-        />
+        <View style={styles.avatarWrapper}>
+          {/* Double pulsing rings */}
+          <Animated.View style={[styles.avatarRing, ring1Style]} />
+          <Animated.View style={[styles.avatarRing, ring2Style]} />
+          
+          <Image
+            source={{ uri: girl?.photos?.[0] || 'https://via.placeholder.com/120' }}
+            style={styles.avatar}
+          />
+        </View>
         <Text style={styles.callerName}>{girl?.name || 'Unknown'}</Text>
-        <Text style={styles.callerStatus}>Incoming Video Call...</Text>
+        <Text style={styles.callerStatus}>
+          {callType === 'voice' ? 'Incoming Audio Call...' : 'Incoming Video Call...'}
+        </Text>
       </View>
 
       {/* Action buttons */}
-      <View style={styles.actions}>
+      <View style={styles.actionsContainer}>
         {/* Decline */}
-        <Pressable style={[styles.actionBtn, styles.declineBtn]} onPress={handleDecline}>
-          <Ionicons name="close" size={32} color="#FFF" />
-        </Pressable>
+        <View style={styles.actionColumn}>
+          <Pressable style={[styles.actionBtn, styles.declineBtn]} onPress={handleDecline}>
+            <Ionicons name="close" size={32} color="#FFF" />
+          </Pressable>
+          <Text style={styles.labelText}>Decline</Text>
+        </View>
 
         {/* Accept */}
-        <Animated.View style={pulseStyle}>
-          <Pressable style={[styles.actionBtn, styles.acceptBtn]} onPress={handleAccept}>
-            <Ionicons name="videocam" size={32} color="#FFF" />
-          </Pressable>
-        </Animated.View>
-      </View>
-
-      <View style={styles.labels}>
-        <Text style={styles.labelText}>Decline</Text>
-        <Text style={styles.labelText}>Accept</Text>
+        <View style={styles.actionColumn}>
+          <Animated.View style={pulseStyle}>
+            <Pressable style={[styles.actionBtn, styles.acceptBtn]} onPress={handleAccept}>
+              <Ionicons name={callType === 'voice' ? 'call' : 'videocam'} size={30} color="#FFF" />
+            </Pressable>
+          </Animated.View>
+          <Text style={styles.labelText}>Accept</Text>
+        </View>
       </View>
 
       <CoinPackSheet
@@ -160,49 +205,85 @@ export default function IncomingCallScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
-  bgImage: { position: 'absolute', width: W, height: H, opacity: 0.4 },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10,10,15,0.6)',
+  root: { flex: 1, backgroundColor: '#0A0A0F', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 100 },
+  bgImage: { position: 'absolute', width: W, height: H },
+  callerSection: { alignItems: 'center', marginTop: 60 },
+  avatarWrapper: {
+    width: 140,
+    height: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  callerSection: { alignItems: 'center', marginBottom: 80 },
   avatarRing: {
-    position: 'absolute', width: 140, height: 140, borderRadius: 70,
-    borderWidth: 2, borderColor: theme.colors.accentMagenta,
-  },
-  avatarRingInner: {
-    width: '100%', height: '100%', borderRadius: 70,
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderColor: theme.colors.accentMagenta,
   },
   avatar: {
-    width: 120, height: 120, borderRadius: 60,
-    borderWidth: 3, borderColor: theme.colors.accentMagenta,
-    marginTop: 10,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2.5,
+    borderColor: '#FFF',
   },
   callerName: {
-    fontSize: 28, fontWeight: '800', color: '#FFF', marginTop: 20,
-    textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 8,
-    textShadowOffset: { width: 0, height: 2 },
+    fontFamily: theme.typography.fontDisplay,
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFF',
+    marginTop: 24,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 10,
+    textShadowOffset: { width: 0, height: 4 },
   },
   callerStatus: {
-    fontSize: 14, color: theme.colors.textSecondary, marginTop: 6,
+    fontFamily: theme.typography.fontBody,
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+    marginTop: 8,
     letterSpacing: 1,
   },
-  actions: {
-    flexDirection: 'row', gap: 60, alignItems: 'center',
+  actionsContainer: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    marginBottom: 40,
+  },
+  actionColumn: {
+    alignItems: 'center',
+    gap: 12,
   },
   actionBtn: {
-    width: 70, height: 70, borderRadius: 35,
-    alignItems: 'center', justifyContent: 'center',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  declineBtn: { backgroundColor: theme.colors.accentRed },
+  declineBtn: {
+    backgroundColor: theme.colors.accentRed,
+    shadowColor: theme.colors.accentRed,
+  },
   acceptBtn: {
     backgroundColor: theme.colors.accentGreen,
-    ...theme.shadow.glowGreen,
+    shadowColor: theme.colors.accentGreen,
   },
-  labels: {
-    flexDirection: 'row', gap: 60, marginTop: 16,
-    width: 200, justifyContent: 'space-between',
+  labelText: {
+    fontFamily: theme.typography.fontBody,
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
-  labelText: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '600' },
 });

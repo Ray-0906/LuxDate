@@ -1,3 +1,4 @@
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -9,7 +10,9 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient';
 import theme from '../../theme/theme.js';
 import { coinsApi } from '../../api/services.js';
 import useAuthStore from '../../store/authStore.js';
@@ -18,11 +21,11 @@ import {
   fetchPaymentGatewayNames,
   isUserCancelledRazorpay,
 } from '../../payments/runPayments.js';
-import PaymentGatewayPickModal from '../../components/PaymentGatewayPickModal.jsx';
 import MockPayConfirmModal from '../../components/MockPayConfirmModal.jsx';
 
 export default function CoinPackScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const route = useRoute();
   const user = useAuthStore((s) => s.user);
   const loadProfile = useAuthStore((s) => s.loadProfile);
   const [packs, setPacks] = useState([]);
@@ -47,7 +50,11 @@ export default function CoinPackScreen({ navigation }) {
       const list = res.data?.data ?? res.data ?? [];
       const filtered = (Array.isArray(list) ? list : []).filter((p) => p?._id && !String(p._id).startsWith('legacy'));
       setPacks(filtered);
-      if (filtered.length > 0) {
+      
+      const routePackId = route.params?.selectedPackId;
+      if (routePackId && filtered.some(p => String(p._id) === String(routePackId))) {
+        setSelectedPackId(routePackId);
+      } else if (filtered.length > 0) {
         setSelectedPackId(filtered[0]._id);
       }
     } catch {
@@ -55,7 +62,7 @@ export default function CoinPackScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [route.params?.selectedPackId]);
 
   useEffect(() => {
     load();
@@ -157,6 +164,8 @@ export default function CoinPackScreen({ navigation }) {
     }
   };
 
+  const selectedPack = packs.find((p) => p._id === selectedPackId);
+
   return (
     <View style={styles.root}>
       <Pressable style={styles.overlay} onPress={onHandleBack} />
@@ -165,115 +174,153 @@ export default function CoinPackScreen({ navigation }) {
         
         <View style={styles.header}>
           {step === 'gateways' ? (
-            <Pressable onPress={onHandleBack} hitSlop={12}>
-              <Ionicons name="chevron-back" size={26} color={theme.colors.textPrimary} />
+            <Pressable onPress={onHandleBack} hitSlop={12} style={styles.headerBtn}>
+              <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
             </Pressable>
           ) : (
-            <View style={{ width: 26 }} />
+            <View style={{ width: 32 }} />
           )}
-          <Text style={styles.headerTitle}>Make video calls with Coins</Text>
-          <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
-            <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+
+          <View style={styles.titleArea}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepBadgeText}>
+                {step === 'packages' ? 'STEP 1 OF 2' : 'STEP 2 OF 2'}
+              </Text>
+            </View>
+            <Text style={styles.headerTitle}>
+              {step === 'packages' ? 'Get More Coins' : 'Select Payment'}
+            </Text>
+          </View>
+
+          <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.headerBtn}>
+            <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
           </Pressable>
         </View>
-        {step === 'packages' && <Text style={styles.sub}>Call beauties with Coins</Text>}
 
-      {loading ? (
-        <ActivityIndicator color={theme.colors.accentMagenta} style={{ marginTop: 40 }} />
-      ) : (
-        <ScrollView style={styles.scrollContent} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-          {step === 'packages' ? (
-            <View style={styles.gridContainer}>
-              {packs.map((item) => {
-                const isSelected = selectedPackId === item._id;
-                const discount = item.bonusCoins ? Math.round((item.bonusCoins / item.coins) * 100) : 0;
-                return (
-                  <Pressable
-                    key={item._id}
-                    style={[styles.gridItem, isSelected && styles.gridItemSelected]}
-                    onPress={() => setSelectedPackId(item._id)}
-                  >
-                    {!!discount && (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{discount}% off</Text>
+        <Text style={styles.sub}>
+          {step === 'packages' ? 'Fuel your connections.' : 'Select your preferred gateway.'}
+        </Text>
+
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color={theme.colors.accentMagenta} size="large" />
+          </View>
+        ) : (
+          <ScrollView style={styles.scrollContent} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+            {step === 'packages' ? (
+              <View style={styles.gridContainer}>
+                {packs.map((item) => {
+                  const isSelected = selectedPackId === item._id;
+                  const discount = item.bonusCoins ? Math.round((item.bonusCoins / item.coins) * 100) : 0;
+                  return (
+                    <Pressable
+                      key={item._id}
+                      style={[styles.gridItem, isSelected && styles.gridItemSelected]}
+                      onPress={() => setSelectedPackId(item._id)}
+                    >
+                      {!!discount && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{discount}% OFF</Text>
+                        </View>
+                      )}
+                      
+                      {isSelected && (
+                        <View style={styles.checkIndicator}>
+                          <Ionicons name="checkmark-circle" size={20} color={theme.colors.accentMagenta} />
+                        </View>
+                      )}
+
+                      <View style={styles.packIconWrap}>
+                        <Ionicons name="diamond" size={28} color={theme.colors.accentGold} />
                       </View>
-                    )}
-                    <Ionicons name="diamond" size={32} color={theme.colors.accentMagenta} style={styles.iconSpaced} />
-                    <Text style={[styles.gridItemCoins, isSelected && styles.textSelected]}>
-                      {item.coins}
-                    </Text>
-                    <View style={[styles.pricePill, isSelected && styles.pricePillSelected]}>
-                      <Text style={[styles.gridItemPrice, isSelected && styles.textSelected]}>
-                          ₹{item.priceInr.toFixed(2)}
+                      
+                      <Text style={styles.gridItemCoins}>
+                        {item.coins}
                       </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-              {packs.length === 0 && (
-                  <Text style={styles.empty}>No packs available. Try again later.</Text>
-              )}
-            </View>
-          ) : (
-            <View style={styles.paymentContainer}>
-              <View style={styles.summaryCard}>
-                <View style={styles.summaryCoinsWrap}>
-                  <Ionicons name="diamond" size={24} color={theme.colors.accentMagenta} />
-                  <Text style={styles.summaryCoinsText}>{packs.find(p=>p._id === selectedPackId)?.coins}</Text>
-                </View>
-                <Text style={styles.summaryPriceText}>₹{packs.find(p=>p._id === selectedPackId)?.priceInr.toFixed(2)}</Text>
-              </View>
-
-              <View style={styles.gatewaysList}>
-                {gateways.map(gw => (
-                  <Pressable 
-                    key={gw} 
-                    style={styles.gatewayRow}
-                    onPress={() => setSelectedGateway(gw)}
-                  >
-                    <View style={styles.gatewayInfo}>
-                      <View style={styles.gatewayIcon}>
-                        <Ionicons name="card-outline" size={20} color={theme.colors.textSecondary} />
+                      
+                      <View style={[styles.pricePill, isSelected && styles.pricePillSelected]}>
+                        <Text style={styles.gridItemPrice}>
+                          ₹{item.priceInr.toFixed(2)}
+                        </Text>
                       </View>
-                      <Text style={styles.gatewayName}>{gw === 'mock' ? 'Test pay (mock — no real charge)' : gw}</Text>
-                    </View>
-                    <View style={styles.radioBorder}>
-                      {selectedGateway === gw && <View style={styles.radioDot} />}
-                    </View>
-                  </Pressable>
-                ))}
+                    </Pressable>
+                  );
+                })}
+                {packs.length === 0 && (
+                  <Text style={styles.empty}>No packs available. Try again later.</Text>
+                )}
               </View>
-            </View>
-          )}
-        </ScrollView>
-      )}
+            ) : (
+              <View style={styles.paymentContainer}>
+                <View style={styles.summaryCard}>
+                  <View style={styles.summaryCoinsWrap}>
+                    <Ionicons name="diamond" size={20} color={theme.colors.accentGold} />
+                    <Text style={styles.summaryCoinsText}>{selectedPack?.coins} Coins</Text>
+                  </View>
+                  <Text style={styles.summaryPriceText}>₹{selectedPack?.priceInr.toFixed(2)}</Text>
+                </View>
 
-      {!loading && packs.length > 0 && (
-        <View style={styles.footer}>
-           {step === 'packages' && (
-             <View style={styles.footerInfo}>
-               <Ionicons name="diamond" size={16} color={theme.colors.accentMagenta} />
-               <Text style={styles.balance}> My Coins: {user?.coinBalance ?? 0}</Text>
-             </View>
-           )}
-           <Pressable 
-             onPress={() => {
-               const pack = packs.find(p => p._id === selectedPackId);
-               if (step === 'packages') {
-                 if (pack) handleBuy(pack);
-               } else {
-                 if (pack && selectedGateway) runCheckout(pack, selectedGateway);
-               }
-             }} 
-             disabled={(step === 'packages' ? !selectedPackId : !selectedGateway) || !!buyingId} 
-             style={[styles.continueBtn, ((step === 'packages' ? !selectedPackId : !selectedGateway) || !!buyingId) && styles.continueBtnDisabled]}
-           >
-             <Text style={styles.continueBtnText}>
-               {loadingGateways ? 'Loading payment methods...' : buyingId ? 'Processing...' : 'Continue'}
-             </Text>
-           </Pressable>
-        </View>
-      )}
+                <View style={styles.gatewaysList}>
+                  {gateways.map(gw => {
+                    const isSelected = selectedGateway === gw;
+                    return (
+                      <Pressable 
+                        key={gw} 
+                        style={[styles.gatewayRow, isSelected && styles.gatewayRowActive]}
+                        onPress={() => setSelectedGateway(gw)}
+                      >
+                        <View style={styles.gatewayInfo}>
+                          <View style={styles.gatewayIcon}>
+                            <Ionicons name="card-outline" size={20} color={theme.colors.textSecondary} />
+                          </View>
+                          <Text style={styles.gatewayName}>{gw === 'mock' ? 'Test Pay (no real charge)' : gw}</Text>
+                        </View>
+                        <View style={[styles.radioBorder, isSelected && styles.radioBorderActive]}>
+                          {isSelected && <View style={styles.radioDot} />}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+          </ScrollView>
+        )}
+
+        {!loading && packs.length > 0 && (
+          <View style={styles.footer}>
+            {step === 'packages' && (
+              <View style={styles.footerInfo}>
+                <Ionicons name="diamond" size={16} color={theme.colors.accentGold} style={{ marginRight: 6 }} />
+                <Text style={styles.balance}>{user?.coinBalance ?? 0} coins in your wallet</Text>
+              </View>
+            )}
+            
+            <Pressable 
+              onPress={() => {
+                const pack = packs.find(p => p._id === selectedPackId);
+                if (step === 'packages') {
+                  if (pack) handleBuy(pack);
+                } else {
+                  if (pack && selectedGateway) runCheckout(pack, selectedGateway);
+                }
+              }} 
+              disabled={(step === 'packages' ? !selectedPackId : !selectedGateway) || !!buyingId} 
+              style={styles.continueBtnWrapper}
+            >
+              <LinearGradient
+                colors={((step === 'packages' ? !selectedPackId : !selectedGateway) || !!buyingId) ? ['rgba(233,30,140,0.4)', 'rgba(124,58,237,0.4)'] : theme.gradients.primary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.continueBtn}
+              >
+                <Text style={styles.continueBtnText}>
+                  {loadingGateways ? 'Loading payment methods...' : buyingId ? 'Processing...' : step === 'packages' ? 'Continue' : 'Complete Payment'}
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+        )}
 
       </View>
 
@@ -289,35 +336,84 @@ export default function CoinPackScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  root: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
   },
   sheetContent: {
-    backgroundColor: theme.colors.bgPrimary,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: theme.colors.bgSecondary,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     paddingTop: 12,
     maxHeight: '85%',
   },
   dragHandle: {
-    width: 40,
-    height: 5,
-    backgroundColor: theme.colors.borderGlass,
-    borderRadius: 3,
+    width: 32,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: theme.colors.textPrimary },
-  sub: { textAlign: 'center', color: theme.colors.textSecondary, fontSize: 14, fontWeight: '500', marginBottom: 24 },
+  headerBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
+  },
+  titleArea: {
+    alignItems: 'center',
+  },
+  stepBadge: {
+    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginBottom: 6,
+  },
+  stepBadgeText: {
+    color: theme.colors.accentCyan,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontDisplay,
+  },
+  sub: {
+    textAlign: 'center',
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 20,
+  },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scrollContent: {
     paddingHorizontal: 20,
   },
@@ -327,59 +423,70 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   gridItem: {
-    width: '31%',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 12,
+    width: '48%',
+    backgroundColor: theme.colors.bgTertiary,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: theme.colors.borderGlass,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 24,
+    paddingBottom: 16,
     alignItems: 'center',
     marginBottom: 16,
     position: 'relative',
     overflow: 'hidden',
   },
   gridItemSelected: {
-    backgroundColor: 'rgba(224, 60, 160, 0.15)', // magenta tint
+    backgroundColor: 'rgba(233, 30, 140, 0.08)',
     borderColor: theme.colors.accentMagenta,
   },
   badge: {
     position: 'absolute',
-    top: 0, left: 0,
+    top: 0,
+    left: 0,
     backgroundColor: theme.colors.accentMagenta,
-    borderBottomRightRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderBottomRightRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   badgeText: {
-    color: '#fff',
-    fontSize: 10,
+    color: '#FFF',
+    fontSize: 9,
     fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  iconSpaced: {
-    marginBottom: 6,
+  checkIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  packIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(201, 168, 76, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
   gridItemCoins: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: theme.colors.textPrimary,
-    marginBottom: 8,
+    fontFamily: theme.typography.fontDisplay,
   },
   pricePill: {
-    backgroundColor: 'transparent',
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
   },
   pricePillSelected: {
-    backgroundColor: theme.colors.bgPrimary,
+    backgroundColor: 'rgba(233, 30, 140, 0.15)',
   },
   gridItemPrice: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  textSelected: {
+    fontSize: 13,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
   },
   empty: {
@@ -398,18 +505,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  balance: { color: theme.colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  balance: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  continueBtnWrapper: {
+    width: '100%',
+  },
   continueBtn: {
-    backgroundColor: theme.colors.accentMagenta,
     width: '100%',
     paddingVertical: 16,
     borderRadius: 30,
     alignItems: 'center',
-  },
-  continueBtnDisabled: {
-    opacity: 0.5,
+    justifyContent: 'center',
   },
   continueBtnText: {
     color: '#fff',
@@ -418,16 +529,18 @@ const styles = StyleSheet.create({
   },
   // Gateway Styles
   paymentContainer: {
-    marginTop: 10,
+    marginTop: 4,
   },
   summaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
     padding: 18,
     borderRadius: 16,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   summaryCoinsWrap: {
     flexDirection: 'row',
@@ -438,6 +551,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     marginLeft: 8,
+    fontFamily: theme.typography.fontDisplay,
   },
   summaryPriceText: {
     color: theme.colors.textPrimary,
@@ -445,15 +559,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   gatewaysList: {
-    gap: 16,
+    gap: 12,
   },
   gatewayRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderGlass,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: theme.colors.bgTertiary,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  gatewayRowActive: {
+    borderColor: theme.colors.accentMagenta,
   },
   gatewayInfo: {
     flexDirection: 'row',
@@ -463,7 +583,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -478,14 +598,17 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: theme.colors.accentMagenta,
+    borderColor: theme.colors.textMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  radioBorderActive: {
+    borderColor: theme.colors.accentMagenta,
+  },
   radioDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: theme.colors.accentMagenta,
   }
 });

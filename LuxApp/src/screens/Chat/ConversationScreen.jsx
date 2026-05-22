@@ -1,4 +1,5 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,9 +15,10 @@ import {
   PermissionsAndroid,
   Modal,
 } from 'react-native';
-import { useSafeAreaInsets,SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import theme from '../../theme/theme.js';
@@ -258,14 +260,13 @@ export default function ConversationScreen({ route, navigation }) {
   const confirmDeleteConversation = async () => {
     try {
       setShowDeleteModal(false);
-      
-        await chatApi.clearConversation(girl._id);
-      
+      await chatApi.clearConversation(girl._id);
       navigation.goBack();
     } catch (e) {
       console.warn('Failed to delete conversation', e);
     }
   };
+
   const handleVideoCall = () => {
     TriggerEngine.cancelScheduled();
     navigation.navigate('OutgoingCall', { girl });
@@ -287,7 +288,13 @@ export default function ConversationScreen({ route, navigation }) {
     }
   };
 
-  const renderMessage = ({ item }) => {
+  const showTimestamp = (item, nextItem) => {
+    if (!nextItem) return true;
+    const diff = new Date(item.sentAt) - new Date(nextItem.sentAt);
+    return diff > 5 * 60 * 1000;
+  };
+
+  const renderMessage = ({ item, index }) => {
     const isMe = item.senderType === 'user';
     const type = item.content?.type || 'text';
     const text = item.content?.text || '';
@@ -295,10 +302,15 @@ export default function ConversationScreen({ route, navigation }) {
     const relationshipEventType =
       item.content?.relationshipEvent?.eventType || '';
 
+    const nextItem = messages[index + 1];
+    const timeStr = new Date(item.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const displayTime = showTimestamp(item, nextItem);
+
     if (type === 'relationship_event') {
       const isBreak = relationshipEventType === 'ended';
       return (
         <View style={styles.relationshipCardWrap}>
+          {displayTime && <Text style={styles.timestampText}>{timeStr}</Text>}
           <View
             style={[
               styles.relationshipCard,
@@ -308,12 +320,12 @@ export default function ConversationScreen({ route, navigation }) {
             ]}
           >
             <Text style={styles.relationshipCardTitle}>
-              {isBreak ? 'ðŸ’” Bond Ended' : 'ðŸ’« Relationship Update'}
+              {isBreak ? '💔 Bond Ended' : '✦ Relationship Update'}
             </Text>
             <Text style={styles.relationshipCardBody}>{text}</Text>
             {item.content?.relationshipEvent?.quote ? (
               <Text style={styles.relationshipCardQuote}>
-                â€œ{item.content.relationshipEvent.quote}â€
+                “{item.content.relationshipEvent.quote}”
               </Text>
             ) : null}
           </View>
@@ -321,90 +333,111 @@ export default function ConversationScreen({ route, navigation }) {
       );
     }
 
-    return (
-      <View
-        style={[
-          styles.messageWrapper,
-          isMe ? styles.messageWrapperMe : styles.messageWrapperGirl,
-        ]}
-      >
-        {!isMe && (
-          <Image
-            source={{
-              uri: girl?.photos?.[0] || 'https://via.placeholder.com/40',
-            }}
-            style={styles.avatarTiny}
-          />
-        )}
-        <View
-          style={[
-            styles.bubble,
-            isMe ? styles.bubbleMe : styles.bubbleGirl,
-            type === 'gift' && styles.giftBubble,
-          ]}
-        >
-          {type === 'photo' && url ? (
-            <Image source={{ uri: url }} style={styles.chatImage} />
-          ) : type === 'gift' ? (
-            <View style={styles.giftBubbleInner}>
-              {item.content?.giftIconUrl ? (
-                <Image
-                  source={{ uri: item.content.giftIconUrl }}
-                  style={styles.giftBubbleImage}
-                />
-              ) : (
-                <Text style={styles.giftBubbleEmoji}>
-                  {item.content?.emojiFallback || 'ðŸŽ'}
-                </Text>
-              )}
-              <View style={styles.giftBubbleCopy}>
-                <Text
-                  style={[
-                    styles.giftBubbleTitle,
-                    isMe ? styles.messageTextMe : styles.messageTextGirl,
-                  ]}
-                >
-                  {item.content?.giftName} x{item.content?.quantity || 1}
-                </Text>
-                <Text
-                  style={[
-                    styles.giftBubbleSub,
-                    isMe ? styles.messageTextMe : styles.messageTextGirl,
-                  ]}
-                >
-                  {item.content?.totalCoinsSpent || 0} coins
-                </Text>
-                {item.content?.relationshipGiftHeadline ? (
-                  <Text
-                    style={[
-                      styles.giftBubbleHeadline,
-                      isMe ? styles.messageTextMe : styles.messageTextGirl,
-                    ]}
-                  >
-                    {item.content.relationshipGiftHeadline}
+    if (type === 'gift') {
+      const senderName = isMe ? 'You' : (girl?.name || 'Girl');
+      return (
+        <View style={styles.messageOuterWrap}>
+          {displayTime && <Text style={styles.timestampText}>{timeStr}</Text>}
+          <View
+            style={[
+              styles.messageWrapper,
+              isMe ? styles.messageWrapperMe : styles.messageWrapperGirl,
+            ]}
+          >
+            {!isMe && (
+              <Image
+                source={{
+                  uri: girl?.photos?.[0] || 'https://via.placeholder.com/40',
+                }}
+                style={styles.avatarTiny}
+              />
+            )}
+            <View style={styles.giftCard}>
+              <Text style={styles.giftCardCaption}>{senderName} sent a gift</Text>
+              <View style={styles.giftCardContent}>
+                {item.content?.giftIconUrl ? (
+                  <Image
+                    source={{ uri: item.content.giftIconUrl }}
+                    style={styles.giftCardImage}
+                  />
+                ) : (
+                  <Text style={styles.giftCardEmoji}>
+                    {item.content?.emojiFallback || '🎁'}
                   </Text>
-                ) : null}
-                {item.content?.sentDuringCallSessionId ? (
-                  <Text
-                    style={[
-                      styles.giftBubbleTag,
-                      isMe ? styles.messageTextMe : styles.messageTextGirl,
-                    ]}
-                  >
-                    Sent during call
+                )}
+                <View style={styles.giftCardDetails}>
+                  <Text style={styles.giftCardTitle}>
+                    {item.content?.giftName} x{item.content?.quantity || 1}
                   </Text>
-                ) : null}
+                  <Text style={styles.giftCardSub}>
+                    {item.content?.totalCoinsSpent || 0} coins
+                  </Text>
+                  {item.content?.relationshipGiftHeadline ? (
+                    <Text style={styles.giftCardHeadline}>
+                      {item.content.relationshipGiftHeadline}
+                    </Text>
+                  ) : null}
+                  {item.content?.sentDuringCallSessionId ? (
+                    <Text style={styles.giftCardTag}>
+                      Sent during call
+                    </Text>
+                  ) : null}
+                </View>
               </View>
             </View>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.messageOuterWrap}>
+        {displayTime && <Text style={styles.timestampText}>{timeStr}</Text>}
+        <View
+          style={[
+            styles.messageWrapper,
+            isMe ? styles.messageWrapperMe : styles.messageWrapperGirl,
+          ]}
+        >
+          {!isMe && (
+            <Image
+              source={{
+                uri: girl?.photos?.[0] || 'https://via.placeholder.com/40',
+              }}
+              style={styles.avatarTiny}
+            />
+          )}
+          {isMe && type !== 'photo' ? (
+            <LinearGradient
+              colors={theme.gradients.primary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.bubble, styles.bubbleMe]}
+            >
+              <Text style={[styles.messageText, styles.messageTextMe]}>
+                {text}
+              </Text>
+            </LinearGradient>
           ) : (
-            <Text
+            <View
               style={[
-                styles.messageText,
-                isMe ? styles.messageTextMe : styles.messageTextGirl,
+                styles.bubble,
+                isMe ? styles.bubbleMe : styles.bubbleGirl,
               ]}
             >
-              {text}
-            </Text>
+              {type === 'photo' && url ? (
+                <Image source={{ uri: url }} style={styles.chatImage} />
+              ) : (
+                <Text
+                  style={[
+                    styles.messageText,
+                    isMe ? styles.messageTextMe : styles.messageTextGirl,
+                  ]}
+                >
+                  {text}
+                </Text>
+              )}
+            </View>
           )}
         </View>
       </View>
@@ -421,31 +454,36 @@ export default function ConversationScreen({ route, navigation }) {
           <View style={styles.header}>
             <Pressable
               onPress={() => navigation.goBack()}
-              style={styles.headerBtn}
+              style={styles.headerBackBtn}
             >
               <Ionicons
                 name="chevron-back"
-                size={28}
+                size={24}
                 color={theme.colors.textPrimary}
               />
             </Pressable>
             <View style={styles.headerProfile}>
-              <Image
-                source={{
-                  uri: girl?.photos?.[0] || 'https://via.placeholder.com/40',
-                }}
-                style={styles.headerAvatar}
-              />
+              <View style={styles.headerAvatarContainer}>
+                <Image
+                  source={{
+                    uri: girl?.photos?.[0] || 'https://via.placeholder.com/40',
+                  }}
+                  style={styles.headerAvatar}
+                />
+              </View>
               <View>
                 <Text style={styles.headerName}>{girl?.name || 'Girl'}</Text>
-                <Text style={styles.headerStatus}>Active now</Text>
+                <View style={styles.onlineStatusContainer}>
+                  <View style={styles.headerOnlineDot} />
+                  <Text style={styles.headerStatus}>Online</Text>
+                </View>
               </View>
             </View>
             <View style={styles.headerActions}>
               <Pressable style={styles.headerBtn}>
                 <Ionicons
                   name="call-outline"
-                  size={24}
+                  size={16}
                   color={theme.colors.textPrimary}
                 />
               </Pressable>
@@ -455,14 +493,14 @@ export default function ConversationScreen({ route, navigation }) {
               >
                 <Ionicons
                   name="trash-outline"
-                  size={24}
-                  color={theme.colors.statusError || 'red'}
+                  size={16}
+                  color={theme.colors.accentRed}
                 />
               </Pressable>
               <Pressable onPress={handleVideoCall} style={styles.headerBtn}>
                 <Ionicons
                   name="videocam-outline"
-                  size={26}
+                  size={16}
                   color={theme.colors.textPrimary}
                 />
               </Pressable>
@@ -513,8 +551,8 @@ export default function ConversationScreen({ route, navigation }) {
                 style={styles.emojiBtn}
                 onPress={() => {
                   if (isEmojiOpen) {
-                    setIsEmojiOpen(false);
-                    setTimeout(() => inputRef.current?.focus(), 100);
+                     setIsEmojiOpen(false);
+                     setTimeout(() => inputRef.current?.focus(), 100);
                   } else {
                     Keyboard.dismiss();
                     setIsAttachmentOpen(false);
@@ -525,7 +563,7 @@ export default function ConversationScreen({ route, navigation }) {
                 <Ionicons
                   name={isEmojiOpen ? 'keyboard-outline' : 'happy-outline'}
                   size={24}
-                  color={theme.colors.textSecondary}
+                  color={isEmojiOpen ? theme.colors.accentMagenta : theme.colors.textSecondary}
                 />
               </Pressable>
 
@@ -547,7 +585,7 @@ export default function ConversationScreen({ route, navigation }) {
               {!inputText ? (
                 <View style={styles.inputAccessories}>
                   <Pressable
-                    style={styles.iconBtn}
+                    style={styles.composerIconBtn}
                     onPress={() => setShowGiftPicker(true)}
                   >
                     <Ionicons
@@ -556,7 +594,7 @@ export default function ConversationScreen({ route, navigation }) {
                       color={theme.colors.accentCyan}
                     />
                   </Pressable>
-                  <Pressable style={styles.iconBtn} onPress={toggleAttachment}>
+                  <Pressable style={styles.composerIconBtn} onPress={toggleAttachment}>
                     <Ionicons
                       name={
                         isAttachmentOpen
@@ -564,13 +602,13 @@ export default function ConversationScreen({ route, navigation }) {
                           : 'image-outline'
                       }
                       size={22}
-                      color={theme.colors.textSecondary}
+                      color={isAttachmentOpen ? theme.colors.accentMagenta : theme.colors.textSecondary}
                     />
                   </Pressable>
                 </View>
               ) : (
                 <Pressable style={styles.sendBtn} onPress={handleSend}>
-                  <Ionicons name="send" size={20} color="#FFF" />
+                  <Ionicons name="send" size={16} color="#FFF" />
                 </Pressable>
               )}
             </View>
@@ -618,7 +656,7 @@ export default function ConversationScreen({ route, navigation }) {
               style={styles.attachmentGalleryBtn}
               onPress={openFullGallery}
             >
-              <Text style={{ color: '#FFF', fontWeight: '600' }}>
+              <Text style={{ color: '#FFF', fontWeight: '600', fontFamily: theme.typography.fontBody }}>
                 All Media
               </Text>
               <Ionicons name="chevron-forward" size={16} color="#FFF" />
@@ -646,7 +684,7 @@ export default function ConversationScreen({ route, navigation }) {
                   source={{ uri: item.node.image.uri }}
                   style={{
                     flex: 1,
-                    borderRadius: 4,
+                    borderRadius: 8,
                     backgroundColor: theme.colors.bgTertiary,
                   }}
                 />
@@ -658,6 +696,7 @@ export default function ConversationScreen({ route, navigation }) {
                   color: theme.colors.textMuted,
                   textAlign: 'center',
                   marginTop: 40,
+                  fontFamily: theme.typography.fontBody,
                 }}
               >
                 Loading recent photos...
@@ -727,7 +766,14 @@ export default function ConversationScreen({ route, navigation }) {
               style={styles.levelUpBtn}
               onPress={() => setLevelUp(null)}
             >
-              <Text style={styles.levelUpBtnText}>Nice</Text>
+              <LinearGradient
+                colors={theme.gradients.gold}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.levelUpBtnGradient}
+              >
+                <Text style={styles.levelUpBtnText}>Nice</Text>
+              </LinearGradient>
             </Pressable>
           </View>
         </View>
@@ -739,64 +785,22 @@ export default function ConversationScreen({ route, navigation }) {
         animationType="fade"
         onRequestClose={() => setShowDeleteModal(false)}
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <View
-            style={{
-              width: '85%',
-              backgroundColor: '#111',
-              borderRadius: 16,
-              padding: 20,
-            }}
-          >
-            <Text
-              style={{
-                color: '#fff',
-                fontSize: 18,
-                fontWeight: '700',
-                marginBottom: 12,
-              }}
-            >
-              Delete Conversation?
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Delete Conversation?</Text>
+            <Text style={styles.modalSubText}>
+              All messages in this conversation will be permanently deleted. This action cannot be undone.
             </Text>
-
-            <Text
-              style={{
-                color: '#999',
-                marginBottom: 20,
-              }}
-            >
-              All messages in this conversation will be permanently deleted.
-            </Text>
-
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'flex-end',
-              }}
-            >
+            <View style={styles.modalActions}>
               <Pressable
                 onPress={() => setShowDeleteModal(false)}
-                style={{ marginRight: 20 }}
+                style={styles.modalCancelBtn}
               >
-                <Text style={{ color: '#999' }}>Cancel</Text>
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
               </Pressable>
 
-              <Pressable onPress={confirmDeleteConversation}>
-                <Text
-                  style={{
-                    color: 'red',
-                    fontWeight: '700',
-                  }}
-                >
-                  Delete
-                </Text>
+              <Pressable onPress={confirmDeleteConversation} style={styles.modalDeleteBtn}>
+                <Text style={styles.modalDeleteBtnText}>Delete</Text>
               </Pressable>
             </View>
           </View>
@@ -836,31 +840,62 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderGlass,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  headerBtn: { padding: 6 },
+  headerBackBtn: { paddingVertical: 6, paddingRight: 6 },
+  headerBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerProfile: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 4,
+    marginLeft: 6,
   },
-  headerAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: 10 },
+  headerAvatarContainer: {
+    borderWidth: 2,
+    borderColor: 'rgba(233,30,140,0.4)',
+    borderRadius: 20,
+    padding: 1.5,
+    marginRight: 10,
+  },
+  headerAvatar: { width: 32, height: 32, borderRadius: 16 },
   headerName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
+    fontFamily: theme.typography.fontDisplay,
     color: theme.colors.textPrimary,
   },
-  headerStatus: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
-  headerActions: { flexDirection: 'row', gap: 10, paddingRight: 4 },
-  listContent: { padding: 16, gap: 12, paddingBottom: 20 },
+  onlineStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  headerOnlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.accentGreen,
+  },
+  headerStatus: { fontSize: 11, fontFamily: theme.typography.fontBody, color: theme.colors.accentCyan, fontWeight: '600' },
+  headerActions: { flexDirection: 'row', gap: 8, paddingRight: 4 },
+  listContent: { paddingHorizontal: 16, paddingVertical: 16, gap: 14 },
+  messageOuterWrap: {
+    width: '100%',
+    marginBottom: 4,
+  },
   messageWrapper: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    marginBottom: 4,
   },
   messageWrapperMe: { justifyContent: 'flex-end' },
   messageWrapperGirl: { justifyContent: 'flex-start' },
@@ -869,32 +904,35 @@ const styles = StyleSheet.create({
     maxWidth: '75%',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 18,
     overflow: 'hidden',
   },
   bubbleMe: {
-    backgroundColor: theme.colors.accentMagenta,
     borderBottomRightRadius: 4,
   },
   bubbleGirl: {
     backgroundColor: theme.colors.bgTertiary,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     borderBottomLeftRadius: 4,
   },
-  giftBubble: { paddingHorizontal: 14, paddingVertical: 12 },
-  messageText: { fontSize: 15, lineHeight: 20 },
+  messageText: { fontSize: 15, lineHeight: 20, fontFamily: theme.typography.fontBody },
   messageTextMe: { color: '#FFF' },
   messageTextGirl: { color: theme.colors.textPrimary },
-  chatImage: { width: 180, height: 180, borderRadius: 8, margin: -6 },
+  chatImage: { width: 180, height: 180, borderRadius: 12, margin: -6 },
   typingContainer: { paddingHorizontal: 20, paddingBottom: 10 },
   typingText: {
     fontSize: 12,
     color: theme.colors.textMuted,
     fontStyle: 'italic',
+    fontFamily: theme.typography.fontBody,
   },
   inputBar: {
     paddingHorizontal: 12,
     paddingTop: 10,
     backgroundColor: theme.colors.bgPrimary,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
   inputRounded: {
     flexDirection: 'row',
@@ -908,6 +946,7 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontBody,
     fontSize: 15,
     maxHeight: 100,
     paddingTop: 6,
@@ -919,7 +958,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     paddingLeft: 8,
   },
-  iconBtn: { padding: 4 },
+  composerIconBtn: { padding: 4 },
   sendBtn: {
     backgroundColor: theme.colors.accentMagenta,
     width: 32,
@@ -931,44 +970,95 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     marginBottom: 2,
   },
-  giftBubbleInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  giftBubbleImage: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: theme.colors.bgSecondary,
+  giftCard: {
+    backgroundColor: '#0E0E1A',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,76,0.4)',
+    borderRadius: 16,
+    padding: 12,
+    maxWidth: '75%',
   },
-  giftBubbleEmoji: { fontSize: 30 },
-  giftBubbleCopy: { flexShrink: 1 },
-  giftBubbleTitle: { fontSize: 15, fontWeight: '800' },
-  giftBubbleSub: { marginTop: 3, fontSize: 12, opacity: 0.9 },
-  giftBubbleHeadline: { marginTop: 6, fontSize: 12, fontWeight: '700' },
-  giftBubbleTag: { marginTop: 5, fontSize: 11, opacity: 0.8 },
+  giftCardCaption: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.accentGold,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    fontFamily: theme.typography.fontBody,
+  },
+  giftCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  giftCardImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  giftCardEmoji: {
+    fontSize: 32,
+  },
+  giftCardDetails: {
+    flexShrink: 1,
+  },
+  giftCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFF',
+    fontFamily: theme.typography.fontBody,
+  },
+  giftCardSub: {
+    fontSize: 11,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+    fontFamily: theme.typography.fontBody,
+  },
+  giftCardHeadline: {
+    fontSize: 11,
+    color: theme.colors.accentCyan,
+    marginTop: 4,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontBody,
+  },
+  giftCardTag: {
+    fontSize: 10,
+    color: theme.colors.accentMagenta,
+    marginTop: 4,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontBody,
+  },
   relationshipCardWrap: {
     alignItems: 'center',
     marginBottom: 8,
+    width: '100%',
   },
   relationshipCard: {
     width: '92%',
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 8,
+    borderWidth: 0,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   relationshipCardAccept: {
-    backgroundColor: 'rgba(157, 78, 221, 0.15)',
-    borderColor: theme.colors.accentViolet,
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderColor: theme.colors.accentCyan,
+    borderLeftWidth: 4,
   },
   relationshipCardBreak: {
-    backgroundColor: 'rgba(255, 48, 64, 0.12)',
+    backgroundColor: 'rgba(255, 59, 107, 0.08)',
     borderColor: theme.colors.accentRed,
+    borderLeftWidth: 4,
   },
   relationshipCardTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: theme.colors.textPrimary,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 1,
+    fontFamily: theme.typography.fontBody,
   },
   relationshipCardBody: {
     marginTop: 6,
@@ -976,6 +1066,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: theme.colors.textPrimary,
     fontWeight: '700',
+    fontFamily: theme.typography.fontBody,
   },
   relationshipCardQuote: {
     marginTop: 6,
@@ -983,10 +1074,18 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: theme.colors.textSecondary,
     fontStyle: 'italic',
+    fontFamily: theme.typography.fontBody,
+  },
+  timestampText: {
+    fontSize: 10,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
+    marginVertical: 12,
+    fontFamily: theme.typography.fontBody,
   },
   levelUpBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -998,7 +1097,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: theme.colors.borderGlass,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   levelUpEyebrow: {
     color: theme.colors.accentCyan,
@@ -1006,27 +1105,94 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',
+    fontFamily: theme.typography.fontBody,
   },
   levelUpTitle: {
     marginTop: 12,
     color: theme.colors.textPrimary,
     fontSize: 30,
     fontWeight: '900',
+    fontFamily: theme.typography.fontDisplay,
   },
   levelUpBody: {
     marginTop: 8,
     color: theme.colors.textSecondary,
     fontSize: 14,
+    fontFamily: theme.typography.fontBody,
   },
   levelUpBtn: {
     marginTop: 20,
-    backgroundColor: theme.colors.accentMagenta,
-    borderRadius: 18,
-    paddingHorizontal: 26,
-    paddingVertical: 14,
+    borderRadius: 20,
+    overflow: 'hidden',
+    width: '60%',
+  },
+  levelUpBtnGradient: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   levelUpBtnText: {
-    color: '#FFF',
+    color: '#0A0A0F',
     fontWeight: '800',
+    fontFamily: theme.typography.fontBody,
+  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: {
+    width: '80%',
+    backgroundColor: theme.colors.bgSecondary,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: theme.typography.fontDisplay,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubText: {
+    fontSize: 14,
+    fontFamily: theme.typography.fontBody,
+    color: theme.colors.textSecondary,
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 24,
+    backgroundColor: theme.colors.bgTertiary,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modalCancelBtnText: {
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
+    fontSize: 14,
+    fontFamily: theme.typography.fontBody,
+  },
+  modalDeleteBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 24,
+    backgroundColor: theme.colors.accentRed,
+  },
+  modalDeleteBtnText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 14,
+    fontFamily: theme.typography.fontBody,
   },
 });

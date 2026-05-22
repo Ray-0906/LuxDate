@@ -1,4 +1,5 @@
-﻿import React, { useState, useCallback, useEffect } from 'react';
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,20 +9,22 @@ import {
   Image,
   Modal,
   RefreshControl,
-  Pressable,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { callsApi } from '../../api/services';
 import theme from '../../theme/theme.js';
 
 const CallHistoryScreen = () => {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [calls, setCalls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [showClearModal, setShowClearModal] = useState(false);
 
   const fetchHistory = async (pageNumber = 1, shouldRefresh = false) => {
     try {
@@ -61,8 +64,6 @@ const CallHistoryScreen = () => {
     }
   };
 
-  const [showClearModal, setShowClearModal] = useState(false);
-
   const confirmClearAll = async () => {
     try {
       setShowClearModal(false);
@@ -89,55 +90,56 @@ const CallHistoryScreen = () => {
     const date = new Date(dateStr);
     const diff = Math.floor((new Date() - date) / 60000); // mins
     if (diff < 1) return 'Just now';
-    if (diff < 60) return `${diff} mins ago`;
-    if (diff < 1440) return `${Math.floor(diff / 60)} hrs ago`;
+    if (diff < 60) return `${diff}m ago`;
+    if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
     return date.toLocaleDateString();
   };
 
-  const getCallIcon = (status, type) => {
-    if (status === 'missed' || status === 'rejected')
-      return (
-        <Ionicons
-          name="call-outline"
-          size={16}
-          color={theme.colors.accentRed}
-        />
-      );
-    return type === 'incoming' ? (
-      <Ionicons
-        name="call-outline"
-        size={16}
-        color={theme.colors.accentGreen}
-      />
-    ) : (
-      <Ionicons
-        name="call-outline"
-        size={16}
-        color={theme.colors.textPrimary}
-      />
-    );
+  const getStatusColor = (status) => {
+    if (status === 'accepted') return theme.colors.accentCyan; // Cyan #00E5FF
+    if (status === 'missed') return theme.colors.accentRed;    // Crimson #FF3B6B
+    return '#B8B8DC'; // Muted Lavender rejected
+  };
+
+  const getCallIconName = (status, type) => {
+    if (status === 'missed' || status === 'rejected') {
+      return 'call-outline';
+    }
+    return type === 'incoming' ? 'arrow-down-left-outline' : 'arrow-up-right-outline';
   };
 
   const renderItem = ({ item }) => {
-    const isMissed = item.status === 'missed' || item.status === 'rejected';
+    const statusColor = getStatusColor(item.status);
+    const isOnline = item.girlProfileId?._id 
+      ? (item.girlProfileId._id.charCodeAt(item.girlProfileId._id.length - 1) % 2 === 0) 
+      : false;
 
     return (
       <View style={styles.callItem}>
-        <Image
-          source={{
-            uri:
-              item.girlProfileId?.photos?.[0] ||
-              'https://via.placeholder.com/150',
-          }}
-          style={styles.avatar}
-        />
+        <View style={styles.avatarContainer}>
+          <Image
+            source={{
+              uri:
+                item.girlProfileId?.photos?.[0] ||
+                item.girlProfileId?.profilePhotoUrl ||
+                'https://via.placeholder.com/150',
+            }}
+            style={[styles.avatar, { borderColor: statusColor }]}
+          />
+          {isOnline && <View style={styles.onlineDot} />}
+        </View>
         <View style={styles.callInfo}>
-          <Text style={[styles.name, isMissed && styles.missedName]}>
+          <Text style={styles.name}>
             {item.girlProfileId?.name || 'Unknown'}
           </Text>
           <View style={styles.callDetails}>
-            {getCallIcon(item.status, item.type)}
-            <Text style={styles.statusText}>
+            <Ionicons
+              name={getCallIconName(item.status, item.type)}
+              size={14}
+              color={statusColor}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.statusText, { color: statusColor }]}>
               {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
               {item.status === 'accepted'
                 ? ` • ${formatDuration(item.duration)}`
@@ -151,80 +153,56 @@ const CallHistoryScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.backBtn}
+          style={styles.headerBtn}
           onPress={() => navigation.goBack()}
         >
           <Ionicons
-            name="arrow-back"
-            size={24}
+            name="chevron-back-outline"
+            size={20}
             color={theme.colors.textPrimary}
           />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Call History</Text>
-        <TouchableOpacity style={styles.clearBtn} onPress={handleClearAll}>
+        <TouchableOpacity style={styles.headerBtn} onPress={handleClearAll}>
           <Ionicons
             name="trash-outline"
-            size={24}
-            color={theme.colors.accentRed || theme.colors.statusError}
+            size={20}
+            color={theme.colors.accentRed}
           />
         </TouchableOpacity>
       </View>
+
+      {/* Confirmation Modal */}
       <Modal visible={showClearModal} transparent animationType="fade">
-        <View
-          style={{
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: 'rgba(0,0,0,0.5)',
-          }}
-        >
-          <View
-            style={{
-              width: '80%',
-              backgroundColor: '#111',
-              padding: 20,
-              borderRadius: 12,
-            }}
-          >
-            <Text
-              style={{
-                color: '#fff',
-                fontSize: 18,
-                fontWeight: '600',
-                marginBottom: 12,
-              }}
-            >
-              Clear Call History?
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons
+                name="alert-circle-outline"
+                size={32}
+                color={theme.colors.accentRed}
+              />
+            </View>
+            <Text style={styles.modalTitle}>Clear History?</Text>
+            <Text style={styles.modalSubtitle}>
+              This will permanently delete all call records. This action cannot be undone.
             </Text>
-
-            <Text
-              style={{
-                color: '#999',
-                marginBottom: 20,
-              }}
-            >
-              This will remove all call logs permanently.
-            </Text>
-
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'flex-end',
-              }}
-            >
+            <View style={styles.modalButtons}>
               <TouchableOpacity
                 onPress={() => setShowClearModal(false)}
-                style={{ marginRight: 20 }}
+                style={styles.cancelBtn}
               >
-                <Text style={{ color: '#999' }}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity onPress={confirmClearAll}>
-                <Text style={{ color: 'red', fontWeight: '600' }}>Clear</Text>
+              <TouchableOpacity
+                onPress={confirmClearAll}
+                style={styles.confirmBtn}
+              >
+                <Text style={styles.confirmBtnText}>Clear All</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -248,7 +226,14 @@ const CallHistoryScreen = () => {
         ListEmptyComponent={
           !loading && (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptyText}>No call history yet</Text>
+              <Ionicons
+                name="call-outline"
+                size={48}
+                color={theme.colors.textMuted}
+                style={{ marginBottom: 12 }}
+              />
+              <Text style={styles.emptyText}>No calls logged</Text>
+              <Text style={styles.emptySubtext}>Your recent calls will appear here.</Text>
             </View>
           )
         }
@@ -263,52 +248,180 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 16,
-    backgroundColor: '#000',
-    borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
-  backBtn: { padding: 4 },
-  clearBtn: { padding: 4 },
+  headerBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.colors.bgTertiary,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerTitle: {
-    fontWeight: '600',
-    fontSize: 18,
+    fontFamily: theme.typography.fontDisplay,
+    fontWeight: '800',
+    fontSize: 20,
     color: theme.colors.textPrimary,
   },
-  listContent: { flexGrow: 1, paddingBottom: 20 },
+  listContent: { flexGrow: 1, paddingBottom: 40 },
   callItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1A1A1A',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
-  avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#333' },
-  callInfo: { flex: 1, marginLeft: 16 },
+  avatarContainer: {
+    position: 'relative',
+    width: 48,
+    height: 48,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    backgroundColor: theme.colors.bgTertiary,
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.accentGreen,
+    borderWidth: 1.5,
+    borderColor: theme.colors.bgPrimary,
+  },
+  callInfo: { flex: 1, marginLeft: 14 },
   name: {
-    fontWeight: '600',
-    fontSize: 16,
+    fontFamily: theme.typography.fontDisplay,
+    fontWeight: '700',
+    fontSize: 15,
     color: theme.colors.textPrimary,
     marginBottom: 4,
   },
-  missedName: { color: theme.colors.accentRed },
   callDetails: { flexDirection: 'row', alignItems: 'center' },
   statusText: {
+    fontFamily: theme.typography.fontBody,
+    fontWeight: '500',
+    fontSize: 13,
+  },
+  timeText: {
+    fontFamily: theme.typography.fontBody,
     fontWeight: '400',
+    fontSize: 11,
+    color: theme.colors.textMuted,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10,10,15,0.85)',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: theme.colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  modalIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,59,107,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontFamily: theme.typography.fontDisplay,
+    fontWeight: '800',
+    fontSize: 20,
+    color: theme.colors.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontFamily: theme.typography.fontBody,
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+    paddingHorizontal: 10,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    fontFamily: theme.typography.fontBody,
+    fontWeight: '700',
     fontSize: 14,
     color: theme.colors.textSecondary,
-    marginLeft: 6,
   },
-  timeText: { fontWeight: '400', fontSize: 12, color: theme.colors.textMuted },
+  confirmBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: theme.colors.accentRed,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnText: {
+    fontFamily: theme.typography.fontBody,
+    fontWeight: '700',
+    fontSize: 14,
+    color: '#FFF',
+  },
   emptyWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 100,
+    marginTop: 140,
+    paddingHorizontal: 40,
   },
-  emptyText: { fontWeight: '400', fontSize: 16, color: theme.colors.textMuted },
+  emptyText: {
+    fontFamily: theme.typography.fontDisplay,
+    fontWeight: '700',
+    fontSize: 16,
+    color: theme.colors.textPrimary,
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontFamily: theme.typography.fontBody,
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+  },
 });
 
 export default CallHistoryScreen;

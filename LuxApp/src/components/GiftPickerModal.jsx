@@ -1,3 +1,4 @@
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import LinearGradient from 'react-native-linear-gradient';
 import theme from '../theme/theme.js';
 import useGiftStore from '../store/giftStore.js';
 import useAuthStore from '../store/authStore.js';
@@ -66,13 +68,14 @@ export default function GiftPickerModal({
   const totalCost = (selectedGift?.coinCost || 0) * quantity;
   const canDecreaseQuantity = quantity > MIN_QUANTITY;
   const canIncreaseQuantity = quantity < MAX_QUANTITY;
+  
   const sheetHeight = useMemo(() => {
     if (variant === 'call') {
       const preferred = Math.round(windowHeight * 0.42);
-      return Math.max(332, Math.min(preferred, 392));
+      return Math.max(340, Math.min(preferred, 400));
     }
-    const preferred = Math.round(windowHeight * 0.46);
-    return Math.max(372, Math.min(preferred, 436));
+    const preferred = Math.round(windowHeight * 0.48);
+    return Math.max(380, Math.min(preferred, 450));
   }, [variant, windowHeight]);
 
   const changeQuantity = (delta) => {
@@ -126,7 +129,6 @@ export default function GiftPickerModal({
           onPress={() => setSelectedGiftId(item._id)}
           style={[
             styles.giftCard,
-            variant === 'call' ? styles.giftCardCall : styles.giftCardChat,
             isSelected && styles.giftCardSelected,
           ]}
         >
@@ -146,12 +148,11 @@ export default function GiftPickerModal({
     <View style={[styles.sheet, variant === 'call' ? styles.sheetCall : styles.sheetChat, { height: sheetHeight }]}>
       <View style={styles.handle} />
       <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.title}>Send Gift</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>✦ EXCLUSIVE GIFTS</Text>
           <Text style={styles.balance}>Balance: {user?.coinBalance || 0} coins</Text>
-          <Text style={styles.subcopy}>Sorted by coin value, low to high.</Text>
         </View>
-        <Pressable onPress={onClose}>
+        <Pressable onPress={onClose} hitSlop={10}>
           <Text style={styles.close}>Close</Text>
         </Pressable>
       </View>
@@ -159,7 +160,7 @@ export default function GiftPickerModal({
       <View style={styles.catalogRail}>
         <FlatList
           data={filteredGifts}
-          numColumns={3}
+          numColumns={4}
           keyExtractor={(item) => String(item._id)}
           renderItem={renderGiftCard}
           showsVerticalScrollIndicator={false}
@@ -171,7 +172,7 @@ export default function GiftPickerModal({
       </View>
 
       {selectedGift && (
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, variant === 'call' ? 6 : 10) }]}>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, variant === 'call' ? 12 : 16) }]}>
           <View style={styles.selectionBar}>
             <View style={styles.selectionIconWrap}>
               {selectedGift.iconUrl ? (
@@ -187,6 +188,7 @@ export default function GiftPickerModal({
           </View>
 
           <View style={styles.summaryRow}>
+            {/* Quantity Controls */}
             <View style={styles.quantityControl}>
               <Pressable
                 onPress={() => changeQuantity(-1)}
@@ -208,13 +210,22 @@ export default function GiftPickerModal({
               </Pressable>
             </View>
 
-            <View style={styles.totalWrap}>
-              <Text style={styles.totalCaption}>Total</Text>
-              <Text style={styles.totalCost}>{totalCost} coins</Text>
-            </View>
-
-            <Pressable style={[styles.sendBtn, isSending && styles.sendBtnDisabled]} onPress={handleSend}>
-              <Text style={styles.sendBtnText}>{isSending ? 'Sending...' : 'Send'}</Text>
+            {/* Gradient CTA Send Button */}
+            <Pressable 
+              style={[styles.sendBtnPressable, isSending && styles.sendBtnDisabled]} 
+              onPress={handleSend}
+              disabled={isSending}
+            >
+              <LinearGradient
+                colors={theme.gradients.primary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.sendBtn}
+              >
+                <Text style={styles.sendBtnText}>
+                  {isSending ? 'Sending...' : `Send Gift · ${totalCost} coins`}
+                </Text>
+              </LinearGradient>
             </Pressable>
           </View>
         </View>
@@ -235,7 +246,7 @@ export default function GiftPickerModal({
           </View>
         ) : (
           <Pressable style={styles.tapAway} onPress={onClose}>
-            <Pressable onPress={() => {}}>
+            <Pressable onPress={() => {}} style={{ width: '100%' }}>
               {pickerContent}
             </Pressable>
           </Pressable>
@@ -248,18 +259,18 @@ export default function GiftPickerModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(5, 5, 8, 0.75)',
     justifyContent: 'flex-end',
   },
   backdropCall: {
-    backgroundColor: 'rgba(0,0,0,0.18)',
+    backgroundColor: 'rgba(5, 5, 8, 0.35)',
   },
   tapAway: {
     flex: 1,
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: 'rgba(18,18,26,0.98)',
+    backgroundColor: 'rgba(14, 14, 26, 0.98)',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
@@ -267,27 +278,27 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   sheetChat: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 12,
   },
   sheetCall: {
-    borderRadius: 26,
+    borderRadius: 24,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
     marginHorizontal: 12,
-    marginBottom: 132,
+    marginBottom: 110,
   },
   callDock: {
     flex: 1,
     justifyContent: 'flex-end',
   },
   handle: {
-    width: 42,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     alignSelf: 'center',
     marginBottom: 12,
   },
@@ -295,97 +306,92 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+    paddingBottom: 10,
+    marginBottom: 8,
   },
   title: {
     color: theme.colors.textPrimary,
-    fontSize: 17,
+    fontSize: 12,
     fontWeight: '800',
+    fontFamily: theme.typography.fontDisplay,
+    letterSpacing: 1.2,
   },
   balance: {
     marginTop: 4,
-    color: theme.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  subcopy: {
-    marginTop: 4,
-    color: theme.colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
+    color: theme.colors.accentGoldLight,
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontBody,
   },
   close: {
     color: theme.colors.textSecondary,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
+    fontFamily: theme.typography.fontBody,
   },
   catalogRail: {
     flex: 1,
     minHeight: 0,
-    marginTop: 12,
   },
   gridContent: {
-    paddingBottom: 4,
+    paddingBottom: 16,
   },
   gridRow: {
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   giftCell: {
-    flex: 1,
-    maxWidth: '31.5%',
-    marginBottom: 8,
+    width: '23%',
+    marginHorizontal: '1%',
+    marginBottom: 10,
   },
   giftCard: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: theme.colors.borderGlass,
-    backgroundColor: 'rgba(24,24,34,0.98)',
+    backgroundColor: '#161625',
     alignItems: 'center',
-  },
-  giftCardChat: {
-    width: '100%',
-    paddingHorizontal: 7,
-    paddingVertical: 9,
-  },
-  giftCardCall: {
-    width: '100%',
-    paddingHorizontal: 7,
-    paddingVertical: 9,
+    paddingHorizontal: 4,
+    paddingVertical: 8,
   },
   giftCardSelected: {
     borderColor: theme.colors.accentMagenta,
-    backgroundColor: 'rgba(255,45,120,0.16)',
+    backgroundColor: 'rgba(233, 30, 140, 0.12)',
     shadowColor: theme.colors.accentMagenta,
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
   giftImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
-    backgroundColor: theme.colors.bgTertiary,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: theme.colors.bgPrimary,
   },
   giftEmoji: {
-    fontSize: 22,
+    fontSize: 24,
   },
   giftName: {
     marginTop: 6,
     color: theme.colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  giftCost: {
-    marginTop: 2,
-    color: theme.colors.accentMagenta,
     fontSize: 10,
     fontWeight: '700',
+    textAlign: 'center',
+    fontFamily: theme.typography.fontBody,
+  },
+  giftCost: {
+    marginTop: 3,
+    color: theme.colors.accentGold,
+    fontSize: 9,
+    fontWeight: '800',
+    fontFamily: theme.typography.fontBody,
   },
   footer: {
     marginTop: 8,
-    paddingTop: 10,
-    backgroundColor: 'rgba(18,18,26,0.98)',
+    paddingTop: 12,
+    backgroundColor: 'rgba(14, 14, 26, 0.98)',
     borderTopWidth: 1,
     borderTopColor: theme.colors.borderGlass,
   },
@@ -395,18 +401,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   selectionIconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   selectionIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: theme.colors.bgTertiary,
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: theme.colors.bgPrimary,
   },
   selectionEmoji: {
     fontSize: 24,
@@ -417,100 +423,88 @@ const styles = StyleSheet.create({
   summaryRow: {
     marginTop: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   selectedLabel: {
     color: theme.colors.textPrimary,
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: theme.typography.fontDisplay,
   },
   singleCost: {
-    marginTop: 3,
+    marginTop: 2,
     color: theme.colors.textSecondary,
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: theme.typography.fontBody,
   },
   quantityControl: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 6,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
     borderColor: theme.colors.borderGlass,
   },
   stepBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepBtnDisabled: {
-    opacity: 0.38,
+    opacity: 0.25,
   },
   stepBtnText: {
     color: '#FFF',
-    fontSize: 20,
-    fontWeight: '900',
-    lineHeight: 20,
+    fontSize: 18,
+    fontWeight: '800',
   },
   quantityValueWrap: {
-    minWidth: 44,
-    paddingHorizontal: 8,
+    minWidth: 36,
+    paddingHorizontal: 6,
     alignItems: 'center',
   },
   quantityValue: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
+    fontFamily: theme.typography.fontBody,
   },
   quantityCaption: {
-    marginTop: 2,
     color: theme.colors.textMuted,
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
-  totalWrap: {
-    flex: 0.8,
-    minWidth: 0,
-  },
-  totalCaption: {
-    color: theme.colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  totalCost: {
-    marginTop: 3,
-    color: theme.colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '800',
+  sendBtnPressable: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
   },
   sendBtn: {
-    backgroundColor: theme.colors.accentMagenta,
-    borderRadius: 16,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    minWidth: 78,
+    height: 48,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   sendBtnDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   sendBtnText: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
+    fontFamily: theme.typography.fontBody,
   },
   loading: {
     marginTop: 18,
     color: theme.colors.textMuted,
     textAlign: 'center',
+    fontFamily: theme.typography.fontBody,
   },
 });

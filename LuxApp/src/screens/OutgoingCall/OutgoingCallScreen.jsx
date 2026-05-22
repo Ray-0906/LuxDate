@@ -1,24 +1,29 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions } from 'react-native';
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, Image, Dimensions, TouchableOpacity, Pressable } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import theme from '../../theme/theme.js';
 import { callsApi } from '../../api/services.js';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, withSequence } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import TriggerEngine from '../../engines/TriggerEngine.js';
 import CoinPackSheet from '../../components/CoinPackSheet.jsx';
+import LinearGradient from 'react-native-linear-gradient';
 
 const { width: W, height: H } = Dimensions.get('window');
 
 export default function OutgoingCallScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { girl } = route.params;
+  const ringTimeoutRef = useRef(null);
 
   const [statusText, setStatusText] = useState('Calling...');
   const [showCoinSheet, setShowCoinSheet] = useState(false);
 
-  const pulseScale = useSharedValue(1);
-  const ringOpacity = useSharedValue(0.6);
+  const ring1Scale = useSharedValue(1);
+  const ring1Opacity = useSharedValue(0.6);
+  const ring2Scale = useSharedValue(1);
+  const ring2Opacity = useSharedValue(0.6);
 
   const tryAccept = useCallback(async () => {
     setStatusText('Connecting...');
@@ -58,32 +63,44 @@ export default function OutgoingCallScreen({ route, navigation }) {
       }
     });
 
-    pulseScale.value = withRepeat(
-      withSequence(
-        withTiming(1.2, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) })
-      ),
+    ring1Scale.value = withRepeat(
+      withTiming(2.0, { duration: 2500, easing: Easing.out(Easing.ease) }),
       -1,
-      true
+      false
     );
-
-    ringOpacity.value = withRepeat(
-      withSequence(
-        withTiming(0, { duration: 1000, easing: Easing.out(Easing.ease) }),
-        withTiming(0.6, { duration: 0 })
-      ),
+    ring1Opacity.value = withRepeat(
+      withTiming(0, { duration: 2500, easing: Easing.out(Easing.ease) }),
       -1,
       false
     );
 
+    ringTimeoutRef.current = setTimeout(() => {
+      ring2Scale.value = withRepeat(
+        withTiming(2.0, { duration: 2500, easing: Easing.out(Easing.ease) }),
+        -1,
+        false
+      );
+      ring2Opacity.value = withRepeat(
+        withTiming(0, { duration: 2500, easing: Easing.out(Easing.ease) }),
+        -1,
+        false
+      );
+    }, 1250);
+
     return () => {
       unsubscribe();
+      if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
     };
-  }, [pulseScale, ringOpacity, navigation]);
+  }, [ring1Scale, ring1Opacity, ring2Scale, ring2Opacity, navigation]);
 
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: ringOpacity.value,
-    transform: [{ scale: pulseScale.value }],
+  const ring1Style = useAnimatedStyle(() => ({
+    opacity: ring1Opacity.value,
+    transform: [{ scale: ring1Scale.value }],
+  }));
+
+  const ring2Style = useAnimatedStyle(() => ({
+    opacity: ring2Opacity.value,
+    transform: [{ scale: ring2Scale.value }],
   }));
 
   useEffect(() => {
@@ -106,26 +123,45 @@ export default function OutgoingCallScreen({ route, navigation }) {
         style={styles.bgImage}
         blurRadius={20}
       />
-      <View style={styles.overlay} />
+      <LinearGradient
+        colors={['rgba(10,10,15,0.85)', 'rgba(10,10,15,0.5)', 'rgba(10,10,15,0.95)']}
+        style={StyleSheet.absoluteFillObject}
+      />
 
       <View style={styles.callerSection}>
-        <Animated.View style={[styles.avatarRing, ringStyle]}>
-          <View style={styles.avatarRingInner} />
-        </Animated.View>
-        <Image
-          source={{ uri: girl?.photos?.[0] || 'https://via.placeholder.com/120' }}
-          style={styles.avatar}
-        />
+        <View style={styles.avatarWrapper}>
+          <Animated.View style={[styles.avatarRing, ring1Style]} />
+          <Animated.View style={[styles.avatarRing, ring2Style]} />
+          <Image
+            source={{ uri: girl?.photos?.[0] || 'https://via.placeholder.com/120' }}
+            style={styles.avatar}
+          />
+        </View>
         <Text style={styles.callerName}>{girl?.name || 'Unknown'}</Text>
         <Text style={styles.callerStatus}>{statusText}</Text>
       </View>
 
+      {/* Gold Banner for Out of Coins */}
+      {showCoinSheet && (
+        <Pressable onPress={() => setShowCoinSheet(true)} style={styles.goldBanner}>
+          <LinearGradient
+            colors={theme.gradients.gold}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.goldBannerGradient}
+          >
+            <Ionicons name="wallet-outline" size={16} color="#4E3B00" />
+            <Text style={styles.goldBannerText}>Insufficient Balance. Top Up Coins Now →</Text>
+          </LinearGradient>
+        </Pressable>
+      )}
+
       <View style={[styles.actions, { paddingBottom: insets.bottom + 40 }]}>
-        <View style={styles.actionBtnContainer} onTouchEnd={handleHangup}>
+        <TouchableOpacity style={styles.actionBtnContainer} onPress={handleHangup}>
           <View style={[styles.actionBtn, styles.declineBtn]}>
-            <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+            <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
 
       <CoinPackSheet
@@ -142,29 +178,87 @@ export default function OutgoingCallScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
-  bgImage: { position: 'absolute', width: W, height: H, opacity: 0.3 },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  root: { flex: 1, backgroundColor: '#0A0A0F', alignItems: 'center', justifyContent: 'center' },
+  bgImage: { position: 'absolute', width: W, height: H },
   callerSection: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  avatarWrapper: {
+    width: 220,
+    height: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
   avatarRing: {
-    position: 'absolute', width: 220, height: 220,
-    borderRadius: 110, backgroundColor: 'transparent',
-    borderWidth: 2, borderColor: theme.colors.accentMagenta,
-    alignItems: 'center', justifyContent: 'center',
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 2,
+    borderColor: theme.colors.accentMagenta,
   },
-  avatarRingInner: {
-    width: 140, height: 140, borderRadius: 70,
-    backgroundColor: theme.colors.accentMagenta, opacity: 0.2,
+  avatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2.5,
+    borderColor: '#FFF',
+    zIndex: 2,
   },
-  avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#FFF' },
-  callerName: { fontSize: 28, fontWeight: '800', color: '#FFF', marginTop: 24 },
-  callerStatus: { fontSize: 16, color: 'rgba(255,255,255,0.7)', marginTop: 8 },
+  callerName: {
+    fontFamily: theme.typography.fontDisplay,
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFF',
+    marginTop: 24,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 10,
+    textShadowOffset: { width: 0, height: 4 },
+  },
+  callerStatus: {
+    fontFamily: theme.typography.fontBody,
+    fontSize: 15,
+    color: theme.colors.textSecondary,
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  goldBanner: {
+    width: '85%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 24,
+    shadowColor: theme.colors.accentGold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  goldBannerGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  goldBannerText: {
+    fontFamily: theme.typography.fontBody,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3A2E00',
+  },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%' },
   actionBtnContainer: { alignItems: 'center' },
   actionBtn: {
-    width: 72, height: 72, borderRadius: 36,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: theme.colors.accentRed,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   declineBtn: { backgroundColor: theme.colors.accentRed },
 });

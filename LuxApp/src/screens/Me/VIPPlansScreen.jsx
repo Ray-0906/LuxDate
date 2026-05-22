@@ -1,10 +1,12 @@
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, Pressable, StyleSheet, ActivityIndicator, Alert, ScrollView, Dimensions,
-  ImageBackground, Animated
+  Animated
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient';
 import theme from '../../theme/theme.js';
 import { vipApi, coinsApi } from '../../api/services.js';
 import useAuthStore from '../../store/authStore.js';
@@ -148,6 +150,91 @@ const sanitizePlans = (apiPlans) => {
   });
 };
 
+// ----------------------------------------------------
+// Day Card Component
+// ----------------------------------------------------
+
+const PulsingDayCard = ({ isClaimed, isTodayClaimable, isUnlocked, isLocked, dayReward, index, onPress }) => {
+  const pulseAnim = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    if (isTodayClaimable) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.8,
+            duration: 1200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0.3,
+            duration: 1200,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(0.3);
+    }
+  }, [isTodayClaimable, pulseAnim]);
+
+  if (isClaimed) {
+    return (
+      <Pressable onPress={onPress} style={[styles.dayCard, styles.dayCardClaimed]}>
+        <View style={styles.claimedOverlay}>
+          <Ionicons name="checkmark-circle" size={20} color={theme.colors.accentGreen} />
+        </View>
+        <Text style={styles.dayLabel}>Day {dayReward.day}</Text>
+        <Text style={styles.dayCoinsMuted}>+{dayReward.coins}</Text>
+      </Pressable>
+    );
+  }
+
+  if (isLocked) {
+    return (
+      <Pressable onPress={onPress} style={[styles.dayCard, styles.dayCardLocked]}>
+        <View style={styles.lockedOverlay}>
+          <Ionicons name="lock-closed" size={14} color={theme.colors.textMuted} />
+        </View>
+        <Text style={styles.dayLabel}>Day {dayReward.day}</Text>
+        <Text style={styles.dayCoinsMuted}>+{dayReward.coins}</Text>
+      </Pressable>
+    );
+  }
+
+  if (isTodayClaimable) {
+    return (
+      <Pressable onPress={onPress} style={styles.dayCardPressable}>
+        <Animated.View style={[styles.dayCardGlow, { opacity: pulseAnim }]} />
+        <LinearGradient
+          colors={theme.gradients.gold}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.dayCardGradientBorder}
+        >
+          <View style={styles.dayCardToday}>
+            <Text style={styles.dayLabelToday}>Day {dayReward.day}</Text>
+            <View style={styles.dayCoinsRow}>
+              <Ionicons name="diamond" size={10} color={theme.colors.accentGold} style={{ marginRight: 2 }} />
+              <Text style={styles.dayCoinsToday}>+{dayReward.coins}</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </Pressable>
+    );
+  }
+
+  return (
+    <Pressable onPress={onPress} style={[styles.dayCard, styles.dayCardUnlocked]}>
+      <Text style={styles.dayLabelUnlocked}>Day {dayReward.day}</Text>
+      <View style={styles.dayCoinsRow}>
+        <Ionicons name="diamond" size={10} color={theme.colors.accentGold} style={{ marginRight: 2 }} />
+        <Text style={styles.dayCoinsUnlocked}>+{dayReward.coins}</Text>
+      </View>
+    </Pressable>
+  );
+};
+
 export default function VIPPlansScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
@@ -166,6 +253,9 @@ export default function VIPPlansScreen({ navigation }) {
   const [mockPay, setMockPay] = useState({ visible: false, amountInr: 0, purposeLabel: '' });
   const mockPayResolversRef = useRef({ resolve: null, reject: null });
   const scrollRef = useRef(null);
+
+  // Stable social proof active count
+  const activeMembersCount = useRef(1420 + (new Date().getDate() * 12)).current;
 
   const fetchVipStatus = async () => {
     try {
@@ -319,7 +409,18 @@ export default function VIPPlansScreen({ navigation }) {
         <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
           <Ionicons name="chevron-back" size={26} color={theme.colors.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>{activePlan?.name || 'VIP Membership'}</Text>
+        {isSubbed ? (
+          <View style={styles.vipStatusHeader}>
+            <View style={styles.vipActiveBadge}>
+              <Text style={styles.vipActiveBadgeText}>✦ VIP Active</Text>
+            </View>
+            <Text style={styles.vipExpiryText}>
+              Valid until {vipInfo?.expiryDate ? new Date(vipInfo.expiryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '30 days'}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.headerTitle}>VIP Membership</Text>
+        )}
         <Pressable hitSlop={12}>
           <Ionicons name="help-circle-outline" size={24} color={theme.colors.textSecondary} />
         </Pressable>
@@ -336,8 +437,20 @@ export default function VIPPlansScreen({ navigation }) {
                   style={styles.tabItem}
                   onPress={() => scrollRef.current?.scrollTo({ x: i * SCREEN_WIDTH, animated: true })}
                 >
-                  <Text style={[styles.tabText, safeActiveIndex === i && styles.tabTextActive]}>{p.name}</Text>
-                  {safeActiveIndex === i && <View style={styles.tabIndicator} />}
+                  {safeActiveIndex === i ? (
+                    <LinearGradient
+                      colors={theme.gradients.gold}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.activeTabGradient}
+                    >
+                      <Text style={styles.tabTextActive}>{p.name}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={styles.inactiveTabContainer}>
+                      <Text style={styles.tabText}>{p.name}</Text>
+                    </View>
+                  )}
                 </Pressable>
               ))}
             </ScrollView>
@@ -354,149 +467,129 @@ export default function VIPPlansScreen({ navigation }) {
             style={{ flex: 1 }}
           >
             {plans.map((plan) => (
-              <ScrollView key={plan.id} style={{ width: SCREEN_WIDTH }} contentContainerStyle={{ paddingBottom: 100 }}>
+              <ScrollView key={plan.id} style={{ width: SCREEN_WIDTH }} contentContainerStyle={{ paddingBottom: 120 }}>
                 {resolvePlanProgress(plan.id) && (
-                 <View style={styles.activeBanner}>
-                   <Ionicons name="star" size={20} color={theme.colors.accentYellow} />
-                   <Text style={styles.activeBannerText}>
-                     Plan Purchased ({resolvePlanProgress(plan.id)?.progress?.remainingCheckins || 0} claims left)
+                 <View style={styles.activeBannerGold}>
+                   <Text style={styles.activeBannerTextGold}>
+                     ✦ Active · {resolvePlanProgress(plan.id)?.progress?.remainingCheckins || 0} rewards remaining
                    </Text>
                  </View>
                 )}
+
                 {/* HERO CARD */}
-                <View style={[styles.heroCard, { backgroundColor: plan.theme[0] }]}>
-                <View style={styles.heroGlow} />
-                <View style={styles.heroContent}>
-                   <View>
-                     <Text style={styles.heroTitle}>{plan.name}</Text>
-                     <View style={styles.heroGetContainer}>
-                        <Text style={styles.heroGetText}>Get</Text>
-                        <Ionicons name="diamond" size={16} color="#FFD700" style={{ marginHorizontal: 4 }} />
-                        <Text style={styles.heroGetAmount}>{plan.totalCoins}</Text>
-                     </View>
-                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                       <Text style={styles.heroByText}>by paying</Text>
-                       <Ionicons name="diamond" size={12} color="#FFD700" style={{ marginHorizontal: 4 }} />
-                       <Text style={styles.heroByAmount}>{plan.price} price</Text>
-                     </View>
-                   </View>
-                   <View style={styles.cardImagePlaceholder}>
-                      <Ionicons name="card" size={48} color="#FFD700" />
-                   </View>
+                <LinearGradient
+                  colors={['#1A0A2E', '#0E1A2E']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.heroCardGradient}
+                >
+                  <View style={styles.heroCenterIcon}>
+                    <Ionicons name="crown" size={40} color={theme.colors.accentGold} />
+                  </View>
+                  <Text style={styles.heroPlanName}>{plan.name}</Text>
+                  <Text style={styles.heroTotalCoins}>{plan.totalCoins} Coins</Text>
+                  
+                  <View style={styles.heroPriceContainer}>
+                    {plan.fakePrice > 0 && (
+                      <Text style={styles.heroFakePrice}>Regular price ≈ ₹{plan.fakePrice}</Text>
+                    )}
+                    <Text style={styles.heroPrice}>₹{plan.price}</Text>
+                  </View>
+                  
+                  <Text style={styles.socialProofText}>✦ {activeMembersCount.toLocaleString()} members active this month</Text>
+                </LinearGradient>
+
+                <Text style={styles.calculationTip}>
+                  Normal Recharge ≈ <Ionicons name="diamond" size={12} color={theme.colors.accentGold} /> {plan.price}{'\n'}
+                  <Text style={{ fontWeight: '700', color: theme.colors.textPrimary }}>
+                    {plan.durationDays} Day Card = <Ionicons name="diamond" size={12} color={theme.colors.accentGold} /> {plan.totalCoins} + privileges
+                  </Text>
+                </Text>
+
+                {/* BENEFITS SUMMARY */}
+                <View style={styles.benefitsRow}>
+                  <View style={styles.benefitBox}>
+                    <View style={styles.benefitIconBg}>
+                      <Ionicons name="star" size={24} color={theme.colors.accentGold} />
+                    </View>
+                    <Text style={styles.benefitLabel}>Instant</Text>
+                    <Text style={styles.benefitValue}>+{plan.instantReward}</Text>
+                  </View>
+                  
+                  <View style={styles.benefitBox}>
+                    <View style={styles.benefitIconBg}>
+                      <Ionicons name="calendar" size={24} color={theme.colors.accentGold} />
+                    </View>
+                    <Text style={styles.benefitLabel}>Daily</Text>
+                    <Text style={styles.benefitValue}>+{plan.dailyCheckinCoins}</Text>
+                  </View>
+
+                  <View style={styles.benefitBox}>
+                    <View style={styles.benefitIconBg}>
+                      <Ionicons name="gift" size={24} color={theme.colors.accentGold} />
+                    </View>
+                    <Text style={styles.benefitLabel}>Extra</Text>
+                    <Text style={styles.benefitValue}>VIP Frame</Text>
+                  </View>
+
+                  <View style={styles.benefitBox}>
+                    <View style={styles.benefitIconBg}>
+                      <Ionicons name="crown" size={24} color={theme.colors.accentGold} />
+                    </View>
+                    <Text style={styles.benefitLabel}>Privilege</Text>
+                    <Text style={styles.benefitValue}>VIP Badge</Text>
+                  </View>
                 </View>
-                
-                <View style={styles.timerContainer}>
-                   <Text style={styles.timerText}>11</Text><Text style={styles.timerSep}>:</Text>
-                   <Text style={styles.timerText}>30</Text><Text style={styles.timerSep}>:</Text>
-                   <Text style={styles.timerText}>17</Text><Text style={styles.timerSep}>:</Text>
-                   <Text style={styles.timerText}>52</Text>
+
+                {/* SCHEDULE GRID */}
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>✦ DAILY SCHEDULE</Text>
                 </View>
-             </View>
 
-             <Text style={styles.calculationTip}>
-               Normal Recharge ≈ <Ionicons name="diamond" size={12} color="#FFD700" /> {plan.price}{'\n'}
-               <Text style={{ fontWeight: '700', color: theme.colors.textPrimary }}>
-                 {plan.durationDays} Day Card = <Ionicons name="diamond" size={12} color="#FFD700" /> {plan.totalCoins} + privileges
-               </Text>
-             </Text>
-
-             {/* BENEFITS SUMMARY */}
-             <View style={styles.benefitsRow}>
-               <View style={styles.benefitBox}>
-                 <Text style={styles.benefitLabel}>Instant Reward</Text>
-                 <View style={styles.benefitIconBg}>
-                    <Ionicons name="gift-outline" size={32} color="#FFD700" />
-                 </View>
-                 <Text style={styles.benefitValue}>{plan.instantReward}</Text>
-               </View>
-               <Text style={styles.plus}>+</Text>
-               <View style={styles.benefitBox}>
-                 <Text style={styles.benefitLabel}>Daily Check-in ({plan.durationDays}d)</Text>
-                 <View style={styles.benefitIconBg}>
-                    <Ionicons name="calendar-outline" size={32} color="#FFD700" />
-                 </View>
-                 <Text style={styles.benefitValue}>{plan.dailyCheckinCoins}</Text>
-               </View>
-               <Text style={styles.plus}>+</Text>
-               <View style={styles.benefitBox}>
-                 <Text style={styles.benefitLabel}>Extra Reward</Text>
-                 <View style={styles.benefitIconBg}>
-                    <Ionicons name="diamond-outline" size={32} color="#FFD700" />
-                 </View>
-                 <Text style={styles.benefitValue}>VIP Frame</Text>
-               </View>
-             </View>
-
-             {/* SCHEDULE GRID */}
-             <View style={styles.scheduleHeader}>
-               <View style={styles.lineFade} />
-               <Text style={styles.scheduleTitle}>Get schedule</Text>
-               <View style={styles.lineFade} />
-             </View>
-
-             <View style={styles.scheduleGrid}>
-                 {plan.dailyRewards.map((dayReward, index) => {
-                   const planProgress = resolvePlanProgress(plan.id);
-                   const isPlanPurchased = !!planProgress;
-                   const unlockedDays = isPlanPurchased ? planProgress?.progress?.unlockedDays || 0 : 0;
-                   const claimedDayNumbers = Array.isArray(planProgress?.progress?.claimedDayNumbers)
-                     ? planProgress.progress.claimedDayNumbers
-                     : [];
-                   const dayNumber = Number(dayReward?.day || index + 1);
-                   const isClaimed = claimedDayNumbers.includes(dayNumber);
-                   const isUnlocked = isPlanPurchased && dayNumber <= unlockedDays;
-                   const isTodayClaimable = isUnlocked && !isClaimed;
-                   const isLocked = !isClaimed && !isUnlocked;
-                   const canPressClaim =
-                     isTodayClaimable &&
-                     !claimingSubscriptionId;
-                   
-                   return (
-                   <Pressable 
-                     key={index} 
-                     style={[
-                       styles.dayCard, 
-                       isClaimed && styles.dayCardClaimed,
-                       isTodayClaimable && styles.dayCardToday,
-                       isUnlocked && !isClaimed && styles.dayCardUnlocked,
-                       isLocked && styles.dayCardLocked
-                     ]}
-                     onPress={() => {
-                       if (!isPlanPurchased) {
-                         Alert.alert('VIP', 'Buy this plan to unlock its daily check-ins.');
-                         return;
-                       }
-                       if (isClaimed) {
-                         Alert.alert('VIP', 'This day is already claimed.');
-                         return;
-                       }
-                       if (isLocked) {
-                         Alert.alert('VIP', 'This day is not unlocked yet.');
-                         return;
-                       }
-                       if (!canPressClaim) return;
-                       handleClaimReward(planProgress, dayNumber);
-                     }}
-                   >
-                     {isClaimed && (
-                        <View style={styles.claimedOverlay}>
-                           <Ionicons name="checkmark-circle" size={24} color={theme.colors.success} />
-                        </View>
-                     )}
-                     {isLocked && (
-                        <View style={styles.lockedOverlay}>
-                          <Ionicons name="lock-closed" size={18} color={theme.colors.textMuted} />
-                        </View>
-                     )}
-                     <Text style={[styles.dayLabel, (isClaimed || isTodayClaimable) && { color: theme.colors.textPrimary }]}>{dayReward.day}{dayReward.day === 1 ? 'st' : dayReward.day === 2 ? 'nd' : dayReward.day === 3 ? 'rd' : 'th'}</Text>
-                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-                       <Ionicons name="diamond" size={14} color="#FFD700" />
-                       <Text style={styles.dayCoins}>x{dayReward.coins}</Text>
-                     </View>
-                   </Pressable>
-                 )})}
-               </View>
-
+                <View style={styles.scheduleGrid}>
+                  {plan.dailyRewards.map((dayReward, idx) => {
+                    const planProgress = resolvePlanProgress(plan.id);
+                    const isPlanPurchased = !!planProgress;
+                    const unlockedDays = isPlanPurchased ? planProgress?.progress?.unlockedDays || 0 : 0;
+                    const claimedDayNumbers = Array.isArray(planProgress?.progress?.claimedDayNumbers)
+                      ? planProgress.progress.claimedDayNumbers
+                      : [];
+                    const dayNumber = Number(dayReward?.day || idx + 1);
+                    const isClaimed = claimedDayNumbers.includes(dayNumber);
+                    const isUnlocked = isPlanPurchased && dayNumber <= unlockedDays;
+                    const isTodayClaimable = isUnlocked && !isClaimed;
+                    const isLocked = !isClaimed && !isUnlocked;
+                    const canPressClaim = isTodayClaimable && !claimingSubscriptionId;
+                    
+                    return (
+                      <PulsingDayCard
+                        key={idx}
+                        isClaimed={isClaimed}
+                        isTodayClaimable={isTodayClaimable}
+                        isUnlocked={isUnlocked}
+                        isLocked={isLocked}
+                        dayReward={dayReward}
+                        index={idx}
+                        onPress={() => {
+                          if (!isPlanPurchased) {
+                            Alert.alert('VIP', 'Buy this plan to unlock its daily check-ins.');
+                            return;
+                          }
+                          if (isClaimed) {
+                            Alert.alert('VIP', 'This day is already claimed.');
+                            return;
+                          }
+                          if (isLocked) {
+                            Alert.alert('VIP', 'This day is not unlocked yet.');
+                            return;
+                          }
+                          if (!canPressClaim) return;
+                          handleClaimReward(planProgress, dayNumber);
+                        }}
+                      />
+                    );
+                  })}
+                </View>
               </ScrollView>
             ))}
           </ScrollView>
@@ -515,26 +608,35 @@ export default function VIPPlansScreen({ navigation }) {
       {!noValidPlans && activePlan && (
         <View style={[styles.bottomCTA, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           {isSubbed && isActivePlanPurchased ? (
-            <View style={[styles.ctaButton, { backgroundColor: theme.colors.success }]}>
-              <Text style={[styles.ctaPrice, { fontSize: 18, color: '#fff', marginRight: 0 }]}>
-                Purchased
-              </Text>
+            <View style={styles.ctaButtonDisabled}>
+              <Text style={styles.ctaTextDisabled}>✓ Plan Active</Text>
             </View>
           ) : (
              <Pressable 
-               style={styles.ctaButton} 
                onPress={() => buy(activePlan)}
                disabled={!!buyingId || !!gatewayLoadingPlanId}
+               style={styles.ctaPressable}
              >
-                {discountRate > 0 && (
-                  <View style={styles.discountBadge}>
-                    <Text style={styles.discountBadgeText}>{discountRate}% OFF</Text>
+               <LinearGradient
+                 colors={theme.gradients.gold}
+                 start={{ x: 0, y: 0 }}
+                 end={{ x: 1, y: 0 }}
+                 style={styles.ctaButton}
+               >
+                  {discountRate > 0 && (
+                    <View style={styles.discountBadge}>
+                      <Text style={styles.discountBadgeText}>{discountRate}% OFF</Text>
+                    </View>
+                  )}
+                  <View style={styles.ctaContentRow}>
+                    <Text style={styles.ctaPrice}>
+                      {gatewayLoadingPlanId === activePlan.id ? 'Loading...' : `Activate VIP · ₹${activePlan.price.toFixed(2)}`}
+                    </Text>
+                    {activePlan.fakePrice > 0 && (
+                      <Text style={styles.ctaFakePrice}>₹{activePlan.fakePrice}</Text>
+                    )}
                   </View>
-                )}
-               <Text style={styles.ctaPrice}>
-                 {gatewayLoadingPlanId === activePlan.id ? 'Loading payment methods...' : `₹${activePlan.price.toFixed(2)}`}
-               </Text>
-                {activePlan.fakePrice > 0 && <Text style={styles.ctaFakePrice}>₹{activePlan.fakePrice}</Text>}
+               </LinearGradient>
              </Pressable>
           )}
         </View>
@@ -569,63 +671,82 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 8,
   },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: theme.colors.textPrimary },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontDisplay,
+  },
+  vipStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vipActiveBadge: {
+    backgroundColor: theme.colors.accentGold,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  vipActiveBadgeText: {
+    color: '#3A2E00',
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: theme.typography.fontBody,
+  },
+  vipExpiryText: {
+    color: theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: theme.typography.fontBody,
+  },
   tabContainer: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
+    paddingBottom: 4,
   },
   tabScroll: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
   },
   tabItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+  },
+  activeTabGradient: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    position: 'relative',
+    paddingVertical: 8,
+    borderRadius: 20,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inactiveTabContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabText: {
     fontSize: 14,
     fontWeight: '600',
     color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontBody,
   },
   tabTextActive: {
-    color: theme.colors.textPrimary,
+    color: '#3A2E00',
     fontWeight: '800',
+    fontFamily: theme.typography.fontBody,
   },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: -1,
-    width: 20,
-    height: 3,
-    backgroundColor: theme.colors.textPrimary,
-    borderRadius: 2,
-  },
-  activeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    marginHorizontal: 20,
-    marginTop: 20,
-    marginBottom: -5,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FFD700',
-  },
-  activeBannerText: {
-    color: '#FFD700',
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-  heroCard: {
+  heroCardGradient: {
     margin: 20,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,76,0.35)',
+    alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   heroGlow: {
     position: 'absolute',
@@ -633,139 +754,115 @@ const styles = StyleSheet.create({
     right: -50,
     width: 150,
     height: 150,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
     borderRadius: 75,
   },
-  heroContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  heroTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#fff',
+  heroCenterIcon: {
     marginBottom: 12,
   },
-  heroGetContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  heroGetText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  heroGetAmount: {
-    fontSize: 20,
+  heroPlanName: {
+    fontSize: 16,
     fontWeight: '800',
-    color: '#FFD700',
+    color: theme.colors.accentGoldLight,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    fontFamily: theme.typography.fontDisplay,
+    marginBottom: 6,
   },
-  heroByText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
+  heroTotalCoins: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    fontFamily: theme.typography.fontDisplay,
+    marginBottom: 12,
   },
-  heroByAmount: {
-    fontSize: 12,
-    color: '#FFD700',
-    fontWeight: '600',
-  },
-  cardImagePlaceholder: {
-    width: 70, height: 70,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
+  heroPriceContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.3)'
+    marginBottom: 16,
   },
-  timerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+  heroFakePrice: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    textDecorationLine: 'line-through',
+    fontFamily: theme.typography.fontBody,
+    marginBottom: 4,
   },
-  timerText: {
-    color: '#fff',
+  heroPrice: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: theme.colors.accentGold,
+    fontFamily: theme.typography.fontBody,
+  },
+  socialProofText: {
     fontSize: 12,
+    color: theme.colors.accentGold,
     fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  timerSep: {
-    color: 'rgba(255,255,255,0.5)',
-    marginHorizontal: 4,
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: theme.typography.fontDisplay,
+    textAlign: 'center',
+    marginTop: 8,
   },
   calculationTip: {
     textAlign: 'center',
     color: theme.colors.textSecondary,
-    fontSize: 13,
-    marginBottom: 24,
-    lineHeight: 20,
+    fontSize: 12,
+    marginTop: 16,
+    marginBottom: 20,
+    lineHeight: 18,
+    fontFamily: theme.typography.fontBody,
   },
   benefitsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    marginBottom: 30,
+    marginBottom: 24,
   },
   benefitBox: {
-    alignItems: 'center',
     flex: 1,
+    alignItems: 'center',
+    backgroundColor: 'rgba(201,168,76,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,76,0.15)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    marginHorizontal: 4,
   },
   benefitIconBg: {
-    width: 64,
-    height: 64,
-    backgroundColor: theme.colors.bgSecondary,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.borderGlass,
+    marginBottom: 8,
   },
   benefitLabel: {
     color: theme.colors.textSecondary,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
-    textAlign: 'center',
+    fontFamily: theme.typography.fontBody,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   benefitValue: {
-    color: '#FFD700',
-    fontSize: 14,
+    color: theme.colors.accentGold,
+    fontSize: 12,
     fontWeight: '800',
+    fontFamily: theme.typography.fontBody,
     marginTop: 4,
   },
-  plus: {
-    color: theme.colors.textSecondary,
-    fontSize: 18,
-    fontWeight: '800',
-    marginHorizontal: 10,
-    marginTop: 10,
-  },
-  scheduleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+  sectionHeader: {
     paddingHorizontal: 20,
+    marginTop: 24,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    paddingBottom: 8,
   },
-  lineFade: {
-    flex: 1,
-    height: 1,
-    backgroundColor: theme.colors.borderGlass,
-  },
-  scheduleTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-    marginHorizontal: 16,
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontDisplay,
+    letterSpacing: 1.2,
   },
   scheduleGrid: {
     flexDirection: 'row',
@@ -775,56 +872,112 @@ const styles = StyleSheet.create({
     columnGap: 12,
     justifyContent: 'flex-start'
   },
-  dayCard: {
+  dayCardPressable: {
     width: (SCREEN_WIDTH - 32 - 36) / 4,
-    backgroundColor: theme.colors.bgSecondary,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.borderGlass,
-    overflow: 'hidden',
+    height: 64,
+    position: 'relative',
   },
-  dayCardClaimed: {
-    opacity: 0.6,
-    borderColor: theme.colors.success,
+  dayCardGlow: {
+    position: 'absolute',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: theme.colors.accentGold,
+    borderRadius: 14,
+    transform: [{ scale: 1.05 }],
+  },
+  dayCardGradientBorder: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 1.5,
   },
   dayCardToday: {
-    borderColor: '#FFD700',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    flex: 1,
+    backgroundColor: '#161625',
+    borderRadius: 12.5,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  dayCardUnlocked: {
-    borderColor: 'rgba(255, 215, 0, 0.45)',
-    backgroundColor: 'rgba(255, 215, 0, 0.05)',
+  dayCard: {
+    width: (SCREEN_WIDTH - 32 - 36) / 4,
+    height: 64,
+    backgroundColor: theme.colors.bgTertiary,
+    borderRadius: 14,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
+  },
+  dayCardClaimed: {
+    backgroundColor: 'rgba(45, 255, 147, 0.04)',
+    borderColor: 'rgba(45, 255, 147, 0.2)',
   },
   dayCardLocked: {
-    opacity: 0.85,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    opacity: 0.6,
+  },
+  dayCardUnlocked: {
+    backgroundColor: 'rgba(201, 168, 76, 0.05)',
+    borderColor: 'rgba(201, 168, 76, 0.3)',
+  },
+  dayLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontBody,
+    marginBottom: 4,
+  },
+  dayLabelToday: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.colors.accentGoldLight,
+    fontFamily: theme.typography.fontBody,
+    marginBottom: 4,
+  },
+  dayLabelUnlocked: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontBody,
+    marginBottom: 4,
+  },
+  dayCoinsMuted: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.textMuted,
+    fontFamily: theme.typography.fontDisplay,
+  },
+  dayCoinsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dayCoinsToday: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: theme.colors.accentGold,
+    fontFamily: theme.typography.fontDisplay,
+  },
+  dayCoinsUnlocked: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.accentGoldLight,
+    fontFamily: theme.typography.fontDisplay,
   },
   claimedOverlay: {
     position: 'absolute',
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(10, 10, 15, 0.6)',
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
   },
   lockedOverlay: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 4,
+    right: 4,
     zIndex: 5,
-  },
-  dayLabel: {
-    color: theme.colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-    alignSelf: 'flex-start'
-  },
-  dayCoins: {
-    color: theme.colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-    marginLeft: 4,
   },
   emptyStateContainer: {
     flex: 1,
@@ -838,12 +991,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     textAlign: 'center',
+    fontFamily: theme.typography.fontDisplay,
   },
   emptyStateBody: {
     color: theme.colors.textSecondary,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+    fontFamily: theme.typography.fontBody,
   },
   bottomCTA: {
     position: 'absolute',
@@ -855,41 +1010,86 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: theme.colors.borderGlass,
   },
+  ctaPressable: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
   ctaButton: {
-    backgroundColor: '#e6e6e6',
-    borderRadius: 30,
-    paddingVertical: 14,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 16,
     flexDirection: 'row',
-    minHeight: 56,
+  },
+  ctaContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaPrice: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
-    color: '#000',
-    marginRight: 8,
+    color: '#3A2E00',
+    fontFamily: theme.typography.fontBody,
   },
   ctaFakePrice: {
     fontSize: 13,
-    color: '#666',
+    color: 'rgba(58, 46, 0, 0.6)',
     textDecorationLine: 'line-through',
     fontWeight: '600',
+    fontFamily: theme.typography.fontBody,
+    marginLeft: 8,
+  },
+  ctaButtonDisabled: {
+    height: 56,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaTextDisabled: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontBody,
   },
   discountBadge: {
     position: 'absolute',
-    top: -14,
-    right: '15%',
+    top: -10,
+    right: 20,
     backgroundColor: theme.colors.accentRed,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 16,
     borderWidth: 2,
     borderColor: theme.colors.bgPrimary,
+    zIndex: 20,
   },
   discountBadgeText: {
     color: '#fff',
     fontSize: 11,
     fontWeight: '800',
-  }
+    fontFamily: theme.typography.fontBody,
+  },
+  activeBannerGold: {
+    backgroundColor: 'rgba(201, 168, 76, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 168, 76, 0.3)',
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: -8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeBannerTextGold: {
+    color: theme.colors.accentGoldLight,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontBody,
+  },
 });

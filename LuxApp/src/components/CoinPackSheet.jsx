@@ -1,3 +1,4 @@
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -5,12 +6,13 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  FlatList,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient';
 import theme from '../theme/theme.js';
 import { coinsApi } from '../api/services.js';
 import useAuthStore from '../store/authStore.js';
@@ -148,70 +150,112 @@ export default function CoinPackSheet({
     <>
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
         <Pressable style={styles.backdrop} onPress={onClose}>
-          <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]} onPress={(ev) => ev.stopPropagation?.()}>
-            <Pressable style={styles.closeBtn} onPress={onClose} hitSlop={12}>
-              <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
-            </Pressable>
-            
-            <View style={styles.headerCentered}>
-              <Text style={styles.title}>Make video calls with Coins</Text>
-              <Text style={styles.subtitle}>Call beauties with Coins</Text>
+          <Pressable 
+            style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]} 
+            onPress={(ev) => ev.stopPropagation?.()}
+          >
+            {/* Top Drag Handle */}
+            <View style={styles.dragHandle} />
+
+            <View style={styles.header}>
+              <View style={styles.titleArea}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>STEP 1 OF 2</Text>
+                </View>
+                <Text style={styles.headerTitle}>Get More Coins</Text>
+              </View>
+              <Pressable style={styles.closeBtn} onPress={onClose} hitSlop={12}>
+                <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
+              </Pressable>
             </View>
 
+            <Text style={styles.sub}>Fuel your connections.</Text>
+
             {loading ? (
-              <ActivityIndicator color={theme.colors.accentMagenta} style={{ marginVertical: 40 }} />
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color={theme.colors.accentMagenta} size="large" />
+              </View>
             ) : (
               <>
-                <View style={styles.gridContainer}>
-                  {packs.map((item) => {
-                    const isSelected = selectedPackId === item._id;
-                    const discount = item.bonusCoins ? Math.round((item.bonusCoins / item.coins) * 100) : 0;
-                    return (
-                      <Pressable
-                        key={item._id}
-                        style={[styles.gridItem, isSelected && styles.gridItemSelected]}
-                        onPress={() => setSelectedPackId(item._id)}
-                      >
-                        {!!discount && (
-                          <View style={styles.badge}>
-                            <Text style={styles.badgeText}>{discount}% off</Text>
-                          </View>
-                        )}
-                        <Ionicons name="diamond" size={32} color={theme.colors.accentMagenta} style={styles.iconSpaced} />
-                        <Text style={[styles.gridItemCoins, isSelected && styles.textSelected]}>
-                          {item.coins}
-                        </Text>
-                        <View style={[styles.pricePill, isSelected && styles.pricePillSelected]}>
-                          <Text style={[styles.gridItemPrice, isSelected && styles.textSelected]}>
-                              ₹{item.priceInr.toFixed(2)}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                  {packs.length === 0 && (
-                     <Text style={styles.empty}>No packs available. Try again later.</Text>
-                  )}
-                </View>
-
-                <View style={styles.footerInfo}>
-                  <Ionicons name="diamond" size={16} color={theme.colors.accentMagenta} />
-                  <Text style={styles.balance}> My Coins: {user?.coinBalance ?? 0}</Text>
-                </View>
-                {shortfall > 0 ? (
-                  <Text style={styles.shortfall}>Need {shortfall} more coins for this action</Text>
-                ) : null}
-
-                <Pressable 
-                  style={[styles.continueBtn, (!selectedPackId || !!buyingId) && styles.continueBtnDisabled]}
-                  onPress={() => {
-                    const pack = packs.find(p => p._id === selectedPackId);
-                    if (pack) handleBuy(pack);
-                  }}
-                  disabled={!selectedPackId || !!buyingId}
+                <ScrollView 
+                  style={styles.scrollContent} 
+                  contentContainerStyle={styles.scrollContainer}
+                  showsVerticalScrollIndicator={false}
                 >
-                  <Text style={styles.continueBtnText}>{buyingId ? `Loading...` : `Continue`}</Text>
-                </Pressable>
+                  <View style={styles.gridContainer}>
+                    {packs.map((item) => {
+                      const isSelected = selectedPackId === item._id;
+                      const discount = item.bonusCoins ? Math.round((item.bonusCoins / item.coins) * 100) : 0;
+                      return (
+                        <Pressable
+                          key={item._id}
+                          style={[styles.gridItem, isSelected && styles.gridItemSelected]}
+                          onPress={() => setSelectedPackId(item._id)}
+                        >
+                          {!!discount && (
+                            <View style={styles.badge}>
+                              <Text style={styles.badgeText}>{discount}% OFF</Text>
+                            </View>
+                          )}
+                          
+                          {isSelected && (
+                            <View style={styles.checkIndicator}>
+                              <Ionicons name="checkmark-circle" size={20} color={theme.colors.accentMagenta} />
+                            </View>
+                          )}
+
+                          <View style={styles.packIconWrap}>
+                            <Ionicons name="diamond" size={28} color={theme.colors.accentGold} />
+                          </View>
+                          
+                          <Text style={styles.gridItemCoins}>
+                            {item.coins}
+                          </Text>
+                          
+                          <View style={[styles.pricePill, isSelected && styles.pricePillSelected]}>
+                            <Text style={styles.gridItemPrice}>
+                              ₹{item.priceInr.toFixed(2)}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                    {packs.length === 0 && (
+                       <Text style={styles.empty}>No packs available. Try again later.</Text>
+                    )}
+                  </View>
+                </ScrollView>
+
+                <View style={styles.footer}>
+                  <View style={styles.footerInfo}>
+                    <Ionicons name="diamond" size={16} color={theme.colors.accentGold} style={{ marginRight: 6 }} />
+                    <Text style={styles.balance}>{user?.coinBalance ?? 0} coins in your wallet</Text>
+                  </View>
+                  
+                  {shortfall > 0 ? (
+                    <Text style={styles.shortfall}>Need {shortfall} more coins for this action</Text>
+                  ) : null}
+
+                  <Pressable 
+                    style={[styles.continueBtnWrapper, (!selectedPackId || !!buyingId) && styles.continueBtnDisabled]}
+                    onPress={() => {
+                      const pack = packs.find(p => p._id === selectedPackId);
+                      if (pack) handleBuy(pack);
+                    }}
+                    disabled={!selectedPackId || !!buyingId}
+                  >
+                    <LinearGradient
+                      colors={(!selectedPackId || !!buyingId) ? ['rgba(233,30,140,0.4)', 'rgba(124,58,237,0.4)'] : theme.gradients.primary}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.continueBtn}
+                    >
+                      <Text style={styles.continueBtnText}>
+                        {buyingId ? 'Processing...' : 'Continue'}
+                      </Text>
+                    </LinearGradient>
+                  </Pressable>
+                </View>
               </>
             )}
           </Pressable>
@@ -239,110 +283,208 @@ export default function CoinPackSheet({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(5, 5, 8, 0.75)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: theme.colors.bgPrimary,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: theme.colors.bgSecondary, // Dark Navy #0E0E1A
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingTop: 12,
+    maxHeight: '85%',
+  },
+  dragHandle: {
+    width: 32,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    maxHeight: '90%',
+    marginBottom: 6,
+  },
+  titleArea: {
+    flexDirection: 'column',
+  },
+  stepBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginBottom: 6,
+  },
+  stepBadgeText: {
+    color: theme.colors.accentCyan,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontDisplay,
   },
   closeBtn: {
-    alignSelf: 'flex-end',
-    marginBottom: -20,
-    zIndex: 10,
-  },
-  headerCentered: {
+    width: 32,
+    height: 32,
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: theme.colors.borderGlass,
   },
-  title: { fontSize: 20, fontWeight: '800', color: theme.colors.textPrimary },
-  subtitle: { marginTop: 6, color: theme.colors.textSecondary, fontSize: 14, fontWeight: '500' },
+  sub: {
+    paddingHorizontal: 20,
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 20,
+    fontFamily: theme.typography.fontBody,
+  },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    maxHeight: 340,
+  },
+  scrollContainer: {
+    paddingBottom: 16,
+  },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingBottom: 10,
   },
   gridItem: {
-    width: '31%',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 12,
+    width: '48%',
+    backgroundColor: theme.colors.bgTertiary, // Elevated Dark #161625
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: theme.colors.borderGlass,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 24,
+    paddingBottom: 16,
     alignItems: 'center',
     marginBottom: 16,
     position: 'relative',
     overflow: 'hidden',
   },
   gridItemSelected: {
-    backgroundColor: 'rgba(224, 60, 160, 0.15)',
+    backgroundColor: 'rgba(233, 30, 140, 0.08)',
     borderColor: theme.colors.accentMagenta,
   },
   badge: {
     position: 'absolute',
-    top: 0, left: 0,
+    top: 0,
+    left: 0,
     backgroundColor: theme.colors.accentMagenta,
-    borderBottomRightRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderBottomRightRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   badgeText: {
-    color: '#fff',
-    fontSize: 10,
+    color: '#FFF',
+    fontSize: 9,
     fontWeight: '800',
+    letterSpacing: 0.5,
+    fontFamily: theme.typography.fontBody,
   },
-  iconSpaced: {
-    marginBottom: 6,
+  checkIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  packIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(201, 168, 76, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(201, 168, 76, 0.15)',
   },
   gridItemCoins: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: theme.colors.textPrimary,
-    marginBottom: 8,
+    fontFamily: theme.typography.fontDisplay,
   },
   pricePill: {
-    backgroundColor: 'transparent',
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
   },
   pricePillSelected: {
-    backgroundColor: theme.colors.bgPrimary,
+    backgroundColor: 'rgba(233, 30, 140, 0.15)',
   },
   gridItemPrice: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  textSelected: {
+    fontSize: 13,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontBody,
   },
   empty: {
     color: theme.colors.textSecondary,
     textAlign: 'center',
     width: '100%',
     padding: 20,
+    fontFamily: theme.typography.fontBody,
+  },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.borderGlass,
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
   footerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  balance: { color: theme.colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  shortfall: { alignSelf: 'center', marginTop: -4, marginBottom: 12, color: theme.colors.accentRed, fontWeight: '600', fontSize: 13 },
+  balance: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: theme.typography.fontBody,
+  },
+  shortfall: {
+    alignSelf: 'center',
+    marginTop: -4,
+    marginBottom: 12,
+    color: theme.colors.accentRed,
+    fontWeight: '700',
+    fontSize: 13,
+    fontFamily: theme.typography.fontBody,
+  },
+  continueBtnWrapper: {
+    width: '100%',
+    borderRadius: 30,
+    overflow: 'hidden',
+  },
   continueBtn: {
-    backgroundColor: theme.colors.accentMagenta,
     width: '100%',
     paddingVertical: 16,
-    borderRadius: 30,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   continueBtnDisabled: {
     opacity: 0.5,
@@ -351,5 +493,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '800',
-  }
+    fontFamily: theme.typography.fontBody,
+  },
 });

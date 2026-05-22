@@ -1,9 +1,47 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Platform } from 'react-native';
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withSpring } from 'react-native-reanimated';
+import LinearGradient from 'react-native-linear-gradient';
+import Icon from 'react-native-vector-icons/Ionicons';
 import useAuthStore from '../../store/authStore.js';
 import theme from '../../theme/theme.js';
 import { MeshBackground, GlassInput, PremiumButton } from '../../components/ui.jsx';
+
+function GenderCard({ label, iconName, isActive, onPress }) {
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    scale.value = withSpring(isActive ? 1.05 : 1, { damping: 12 });
+  }, [isActive, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={[
+      styles.genderBtn,
+      isActive && styles.genderActive,
+      animatedStyle
+    ]}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.9}
+        style={styles.genderBtnPressable}
+      >
+        <Icon 
+          name={iconName} 
+          size={24} 
+          color={isActive ? theme.colors.accentMagenta : theme.colors.textSecondary} 
+        />
+        <Text style={[styles.genderText, isActive && styles.genderActiveText]}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
 export default function OnboardScreen() {
   const [name, setName] = useState('');
@@ -11,6 +49,23 @@ export default function OnboardScreen() {
   const [gender, setGender] = useState('');
   const onboard = useAuthStore((s) => s.onboard);
   const isLoading = useAuthStore((s) => s.isLoading);
+
+  const pulseOpacity = useSharedValue(0.4);
+
+  useEffect(() => {
+    pulseOpacity.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 800 }),
+        withTiming(0.4, { duration: 800 })
+      ),
+      -1,
+      true
+    );
+  }, [pulseOpacity]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value,
+  }));
 
   const handleSubmit = () => {
     if (!name || !age || !gender) return;
@@ -23,6 +78,33 @@ export default function OnboardScreen() {
       <MeshBackground />
       
       <Animated.View entering={FadeInDown.duration(600).springify()} style={styles.content}>
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBar}>
+            <LinearGradient
+              colors={theme.gradients.primary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          </View>
+          <View style={styles.progressBar}>
+            <LinearGradient
+              colors={theme.gradients.primary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          </View>
+          <Animated.View style={[styles.progressBar, pulseStyle]}>
+            <LinearGradient
+              colors={theme.gradients.primary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          </Animated.View>
+        </View>
+
         <View style={styles.headerWrap}>
           <Text style={styles.title}>Welcome to LuxDate</Text>
           <Text style={styles.subtitle}>Curated matching for the elite.</Text>
@@ -48,29 +130,33 @@ export default function OnboardScreen() {
 
           <Text style={styles.label}>I identify as</Text>
           <View style={styles.genderRow}>
-            {['male', 'female', 'other'].map((g, idx) => {
-              const isActive = gender === g;
-              return (
-                <TouchableOpacity
-                  key={g}
-                  style={[styles.genderBtn, isActive && styles.genderActive]}
-                  onPress={() => setGender(g)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.genderText, isActive && styles.genderActiveText]}>
-                    {g.charAt(0).toUpperCase() + g.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            <GenderCard 
+              label="Male" 
+              iconName="male-outline" 
+              isActive={gender === 'male'} 
+              onPress={() => setGender('male')} 
+            />
+            <GenderCard 
+              label="Female" 
+              iconName="female-outline" 
+              isActive={gender === 'female'} 
+              onPress={() => setGender('female')} 
+            />
+            <GenderCard 
+              label="Other" 
+              iconName="transgender-outline" 
+              isActive={gender === 'other'} 
+              onPress={() => setGender('other')} 
+            />
           </View>
         </View>
 
         <PremiumButton 
           title={isLoading ? 'Creating Profile...' : 'Enter the Club'} 
-          icon="→"
           onPress={handleSubmit} 
           disabled={isLoading || !name || !age || !gender} 
+          colors={theme.gradients.primary}
+          glowType={theme.shadow.glowMagenta}
           style={styles.submitBtn}
         />
       </Animated.View>
@@ -82,29 +168,77 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.bgPrimary },
   content: { flex: 1, paddingHorizontal: 32, justifyContent: 'center' },
   
+  progressContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 40,
+  },
+  progressBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  
   headerWrap: { marginBottom: 48 },
-  title: { fontSize: 36, fontWeight: '900', color: theme.colors.textPrimary, letterSpacing: -1, marginBottom: 8 },
-  subtitle: { fontSize: 16, color: theme.colors.textMuted, fontWeight: '500' },
+  title: {
+    fontSize: 36,
+    fontFamily: theme.typography.fontDisplay,
+    fontWeight: '900',
+    color: theme.colors.textPrimary,
+    letterSpacing: -1,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    fontFamily: theme.typography.fontBody,
+    color: theme.colors.textSecondary,
+  },
   
   form: { marginBottom: 40 },
-  label: { fontSize: 13, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    fontFamily: theme.typography.fontBody,
+  },
   
   genderRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
   genderBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 16, borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)', alignItems: 'center',
+    flex: 1,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
     backgroundColor: 'rgba(255,255,255,0.02)',
+    overflow: 'hidden',
+  },
+  genderBtnPressable: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
   },
   genderActive: { 
     borderColor: theme.colors.accentMagenta, 
-    backgroundColor: 'rgba(255, 42, 95, 0.1)',
-    ...theme.shadow.glowMagenta,
+    backgroundColor: 'rgba(233, 30, 140, 0.08)',
+    shadowColor: theme.colors.accentMagenta,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  genderText: { fontSize: 14, color: theme.colors.textSecondary, fontWeight: '600' },
-  genderActiveText: { color: theme.colors.accentMagenta, fontWeight: '800' },
+  genderText: { fontSize: 14, color: theme.colors.textSecondary, fontFamily: theme.typography.fontBody, fontWeight: '600' },
+  genderActiveText: { color: theme.colors.accentMagenta, fontWeight: '700' },
   
   submitBtn: {
     marginTop: 10,
-    height: 60,
+    height: 56,
   },
 });

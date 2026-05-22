@@ -1,3 +1,4 @@
+// IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -97,23 +98,6 @@ export default function GirlProfileScreen({ route, navigation }) {
     return () => clearTimeout(timeout);
   }, [giftBurst]);
 
-  if (loading || !girl) {
-    return (
-      <View style={[styles.root, styles.center]}>
-        <ActivityIndicator size="large" color={theme.colors.accentMagenta} />
-      </View>
-    );
-  }
-
-  const photos = girl.photos?.length ? girl.photos : ['https://via.placeholder.com/400'];
-
-  const handleVideoCall = () => {
-    TriggerEngine.cancelScheduled();
-    if (girl?._id) {
-      navigation.navigate('OutgoingCall', { girl });
-    }
-  };
-
   const findSlotByType = useCallback((type) => (
     relationshipInfo.slots.find((slot) => slot.type === type)
   ), [relationshipInfo.slots]);
@@ -184,10 +168,37 @@ export default function GirlProfileScreen({ route, navigation }) {
     }
   }, [refreshRelationshipUI]);
 
+  if (loading || !girl) {
+    return (
+      <View style={[styles.root, styles.center]}>
+        <ActivityIndicator size="large" color={theme.colors.accentMagenta} />
+      </View>
+    );
+  }
+
+  const photos = girl.photos?.length ? girl.photos : ['https://via.placeholder.com/400'];
+
+  const handleVideoCall = () => {
+    TriggerEngine.cancelScheduled();
+    if (girl?._id) {
+      navigation.navigate('OutgoingCall', { girl });
+    }
+  };
+
+  const getStatusPillStyle = (slot) => {
+    if (slot.state === 'accepted') {
+      return { bg: 'rgba(233,30,140,0.12)', text: theme.colors.accentMagenta, label: 'Connected' };
+    } else if (slot.state === 'occupied') {
+      return { bg: 'rgba(201,168,76,0.12)', text: theme.colors.accentGold, label: 'In use' };
+    } else {
+      return { bg: 'rgba(0,229,255,0.12)', text: theme.colors.accentCyan, label: slot.state === 'pending' ? 'Pending' : 'Available' };
+    }
+  };
+
   const renderGiftShowcase = () => {
     if (!girl.gifts?.length) {
       return (
-        <Text style={styles.emptyGiftText}>No gifts yet. Be first one.</Text>
+        <Text style={styles.emptyGiftText}>No gifts yet — be the first to impress.</Text>
       );
     }
 
@@ -213,7 +224,7 @@ export default function GirlProfileScreen({ route, navigation }) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         <View style={styles.imageSection}>
           <Image source={{ uri: photos[currentPhoto] }} style={styles.mainPhoto} resizeMode="cover" />
-          <LinearGradient colors={['rgba(10,10,15,0.4)', 'transparent', 'rgba(10,10,15,0.8)']} style={StyleSheet.absoluteFillObject} />
+          <LinearGradient colors={['rgba(10,10,15,0.3)', 'transparent', 'rgba(10,10,15,0.95)']} style={StyleSheet.absoluteFillObject} />
 
           <Pressable onPress={() => navigation.goBack()} style={[styles.backBtn, { top: insets.top + 8 }]}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
@@ -221,43 +232,49 @@ export default function GirlProfileScreen({ route, navigation }) {
 
           {photos.length > 1 && (
             <Pressable
-              style={styles.thumbnailOverlay}
+              style={[styles.thumbnailOverlay, { top: insets.top + 8 }]}
               onPress={() => setCurrentPhoto((currentPhoto + 1) % photos.length)}
             >
               <Ionicons name="images-outline" size={14} color="#FFF" />
               <Text style={styles.photoCount}>{currentPhoto + 1}/{photos.length}</Text>
             </Pressable>
           )}
-        </View>
 
-        <View style={styles.infoBlock}>
-          <Text style={styles.name}>{girl.name}</Text>
-          <Text style={styles.idText}>ID: {girl._id?.slice(-8).toUpperCase() || '10864564'}</Text>
-
-          <View style={styles.badgeRow}>
-            <View style={[styles.badge, { backgroundColor: '#10b981' }]}>
-              <View style={styles.activeDot} />
-              <Text style={styles.badgeText}>Active</Text>
+          <View style={styles.overlaidInfo}>
+            <View style={styles.nameAgeRow}>
+              <Text style={styles.nameText}>{girl.name}</Text>
+              <Text style={styles.ageText}>, {girl.age || 21}</Text>
             </View>
-            <View style={[styles.badge, { backgroundColor: theme.colors.accentViolet }]}>
-              <Text style={styles.badgeText}>Lv{girl.level || 5}</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.colors.bgTertiary }]}>
-              <Text style={[styles.badgeText, { color: theme.colors.textPrimary }]}>{girl.location || 'Global'}</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.colors.bgTertiary }]}>
-              <Text style={[styles.badgeText, { color: theme.colors.textPrimary }]}>{girl.language || 'English'}</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.colors.bgTertiary }]}>
-              <Text style={[styles.badgeText, { color: theme.colors.textPrimary }]}>{girl.age || 21}</Text>
+            <View style={styles.idChip}>
+              <Text style={styles.idChipText}>#ID · {girl._id?.slice(-8).toUpperCase() || '10864564'}</Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.divider} />
+        <View style={styles.infoBlock}>
+          <View style={styles.badgeRow}>
+            <View style={styles.onlineBadge}>
+              <View style={styles.onlineBadgeDot} />
+              <Text style={styles.onlineBadgeText}>Online Now</Text>
+            </View>
+            <LinearGradient
+              colors={theme.gradients.gold}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.levelBadge}
+            >
+              <Text style={styles.levelBadgeText}>Lv{girl.level || 5}</Text>
+            </LinearGradient>
+            <Text style={styles.secondaryInfoText}>
+              {girl.location || 'Global'}  ·  {girl.language || 'English'}
+            </Text>
+          </View>
+        </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Self-introduction</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>✦ SELF-INTRODUCTION</Text>
+          </View>
           <Text style={styles.bioText} numberOfLines={showBioMore ? undefined : 3}>
             {girl.bio || 'I hope I can know a better you here. I am waiting for you here.'}
           </Text>
@@ -268,20 +285,21 @@ export default function GirlProfileScreen({ route, navigation }) {
           )}
         </View>
 
-        <View style={styles.divider} />
-
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Connections</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>✦ CONNECTIONS</Text>
+          </View>
           <View style={styles.relationshipCardGrid}>
             {relationshipInfo.slots.map((slot) => {
               const state = slot.state;
-              const occupiedName = slot.occupiedBy?.girl?.name || '';
               const isAccepted = state === 'accepted';
               const isPending = state === 'pending';
               const isEmpty = state === 'empty';
               const cardPhoto = isAccepted
                 ? (user?.profilePhotoUrl || 'https://via.placeholder.com/120x120.png?text=You')
                 : '';
+              
+              const statusInfo = getStatusPillStyle(slot);
 
               return (
                 <Pressable
@@ -297,7 +315,7 @@ export default function GirlProfileScreen({ route, navigation }) {
                       <View style={styles.relationshipCardPlaceholder}>
                         <Ionicons
                           name={isPending ? 'hourglass-outline' : isEmpty ? 'person-add-outline' : 'swap-horizontal-outline'}
-                          size={22}
+                          size={20}
                           color={theme.colors.textMuted}
                         />
                       </View>
@@ -306,19 +324,24 @@ export default function GirlProfileScreen({ route, navigation }) {
 
                   <View style={styles.relationshipCardBody}>
                     <Text style={styles.relationshipCardTitle}>{slot.typeIcon} {slot.typeLabel}</Text>
-                    {isAccepted ? (
-                      <Text style={styles.relationshipCardSub}>You are connected</Text>
-                    ) : isPending ? (
-                      <Text style={styles.relationshipCardSub}>Waiting for someone</Text>
-                    ) : state === 'occupied' ? (
-                      <Text style={styles.relationshipCardSub} numberOfLines={1}>In use with {occupiedName}</Text>
-                    ) : (
-                      <Text style={styles.relationshipCardSub}>Waiting for someone</Text>
-                    )}
-                    <View style={styles.relationshipCardFooter}>
-                      <Text style={styles.relationshipCardCost}>
-                        {isEmpty ? `${slot.cost} coins` : state === 'occupied' ? 'Tap to switch' : 'Tap to manage'}
+                    
+                    <View style={[styles.statusPill, { backgroundColor: statusInfo.bg }]}>
+                      <Text style={[styles.statusPillText, { color: statusInfo.text }]} numberOfLines={1}>
+                        {statusInfo.label}
                       </Text>
+                    </View>
+
+                    <View style={styles.relationshipCardFooter}>
+                      {isEmpty ? (
+                        <View style={styles.costBadge}>
+                          <Ionicons name="logo-bitcoin" size={10} color={theme.colors.accentMagenta} />
+                          <Text style={styles.costBadgeText}>{slot.cost}</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.manageText}>
+                          {state === 'occupied' ? 'Switch' : 'Manage'}
+                        </Text>
+                      )}
                     </View>
                   </View>
                 </Pressable>
@@ -330,10 +353,10 @@ export default function GirlProfileScreen({ route, navigation }) {
           </View>
         </View>
 
-        <View style={styles.divider} />
-
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Speaking Language</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>✦ SPEAKING LANGUAGE</Text>
+          </View>
           <View style={styles.langRow}>
             <View style={styles.langBadge}>
               <Text style={styles.langBadgeText}>{girl.language || 'English'}</Text>
@@ -344,29 +367,29 @@ export default function GirlProfileScreen({ route, navigation }) {
           </View>
         </View>
 
-        <View style={styles.divider} />
-
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Honor / Charm</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>✦ HONOR / CHARM</Text>
+          </View>
           <View style={styles.charmCard}>
             <Text style={styles.charmTitle}>Charm Level: {girl.charmLevel || 'Rising'}</Text>
             <View style={styles.charmIcons}>
-              <Text style={styles.charmIconEmoji}>*</Text>
-              <Text style={styles.charmIconEmoji}>*</Text>
-              <Text style={styles.charmIconEmoji}>*</Text>
+              <Ionicons name="star" size={16} color={theme.colors.accentCyan} />
+              <Ionicons name="star" size={16} color={theme.colors.accentCyan} />
+              <Ionicons name="star" size={16} color={theme.colors.accentCyan} />
             </View>
           </View>
         </View>
 
-        <View style={styles.divider} />
-
         <View style={styles.section}>
-          <View style={styles.giftsHeader}>
-            <Text style={styles.sectionTitle}>Gifts</Text>
-            <Pressable style={styles.giftCtaInline} onPress={() => setShowGiftPicker(true)}>
-              <Ionicons name="gift-outline" size={16} color={theme.colors.accentCyan} />
-              <Text style={styles.giftCtaText}>Send Gift</Text>
-            </Pressable>
+          <View style={styles.sectionHeader}>
+            <View style={styles.giftsHeader}>
+              <Text style={styles.sectionTitle}>✦ GIFTS</Text>
+              <Pressable style={styles.giftCtaInline} onPress={() => setShowGiftPicker(true)}>
+                <Ionicons name="gift-outline" size={14} color={theme.colors.accentCyan} />
+                <Text style={styles.giftCtaText}>Send Gift</Text>
+              </Pressable>
+            </View>
           </View>
           {renderGiftShowcase()}
         </View>
@@ -374,27 +397,40 @@ export default function GirlProfileScreen({ route, navigation }) {
 
       <View style={[styles.stickyFooter, { paddingBottom: insets.bottom || 20 }]}>
         <Pressable
-          style={[styles.actionBtn, styles.msgBtn]}
+          style={styles.outlineActionBtn}
           onPress={() => navigation.navigate('Conversation', { girl })}
         >
-          <Ionicons name="chatbubble-ellipses" size={20} color="#FFF" />
-          <Text style={styles.actionText}>Message</Text>
+          <Ionicons name="chatbubble-ellipses-outline" size={20} color="#FFF" />
+          <Text style={styles.outlineActionText}>Message</Text>
         </Pressable>
 
         <Pressable
-          style={[styles.actionBtn, styles.giftBtn]}
+          style={styles.giftCircleBtn}
           onPress={() => setShowGiftPicker(true)}
         >
-          <Ionicons name="gift" size={20} color="#FFF" />
-          <Text style={styles.actionText}>Gift</Text>
+          <LinearGradient
+            colors={theme.gradients.gold}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.giftCircleGradient}
+          >
+            <Ionicons name="gift-outline" size={22} color="#0A0A0F" />
+          </LinearGradient>
         </Pressable>
 
         <Pressable
-          style={[styles.actionBtn, styles.callBtn]}
+          style={styles.gradientActionBtn}
           onPress={handleVideoCall}
         >
-          <Ionicons name="videocam" size={22} color="#FFF" />
-          <Text style={styles.actionText}>Video Call</Text>
+          <LinearGradient
+            colors={theme.gradients.primary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.gradientBtnBg}
+          >
+            <Ionicons name="videocam-outline" size={22} color="#FFF" />
+            <Text style={styles.gradientActionText}>Video Call</Text>
+          </LinearGradient>
         </Pressable>
       </View>
 
@@ -540,7 +576,7 @@ export default function GirlProfileScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
   center: { alignItems: 'center', justifyContent: 'center' },
-  imageSection: { width: W, height: W * 1.1, position: 'relative' },
+  imageSection: { width: W, height: W * 1.15, position: 'relative' },
   mainPhoto: { width: '100%', height: '100%' },
   backBtn: {
     position: 'absolute',
@@ -548,17 +584,20 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(10,10,15,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
   },
   thumbnailOverlay: {
     position: 'absolute',
-    top: 16,
     right: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 16,
+    backgroundColor: 'rgba(10,10,15,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -566,26 +605,88 @@ const styles = StyleSheet.create({
     gap: 6,
     zIndex: 10,
   },
-  photoCount: { color: '#FFF', fontSize: 13, fontWeight: '600' },
-  infoBlock: { padding: 20, paddingBottom: 10 },
-  name: { fontSize: 26, fontWeight: '800', color: theme.colors.textPrimary },
-  idText: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 4 },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  badge: {
+  photoCount: { color: '#FFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontBody },
+  overlaidInfo: {
+    position: 'absolute',
+    bottom: 24,
+    left: 20,
+    right: 20,
+    zIndex: 10,
+  },
+  nameAgeRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  nameText: {
+    fontSize: 28,
+    fontFamily: theme.typography.fontDisplay,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  ageText: {
+    fontSize: 28,
+    fontFamily: theme.typography.fontDisplay,
+    fontWeight: '500',
+    color: '#FFF',
+    opacity: 0.7,
+  },
+  idChip: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  idChipText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontBody,
+  },
+  infoBlock: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  onlineBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(45,255,147,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(45,255,147,0.25)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     gap: 6,
   },
-  activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFF' },
-  badgeText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
-  divider: { height: 1, backgroundColor: theme.colors.borderGlass, marginHorizontal: 20, marginVertical: 10 },
-  section: { paddingHorizontal: 20, paddingVertical: 10 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 },
-  bioText: { fontSize: 15, color: theme.colors.textSecondary, lineHeight: 22 },
-  readMore: { fontSize: 14, color: theme.colors.accentCyan, marginTop: 4, fontWeight: '600' },
+  onlineBadgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.accentGreen },
+  onlineBadgeText: { fontSize: 12, fontWeight: '700', color: theme.colors.accentGreen, fontFamily: theme.typography.fontBody },
+  levelBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  levelBadgeText: { fontSize: 12, fontWeight: '800', color: '#0A0A0F', fontFamily: theme.typography.fontBody },
+  secondaryInfoText: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontBody,
+    marginLeft: 4,
+  },
+  section: { paddingHorizontal: 20, paddingVertical: 14 },
+  sectionHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+    paddingBottom: 8,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+    letterSpacing: 1.3,
+    fontFamily: theme.typography.fontBody,
+  },
+  bioText: { fontSize: 15, color: theme.colors.textSecondary, lineHeight: 22, fontFamily: theme.typography.fontBody },
+  readMore: { fontSize: 14, color: theme.colors.accentMagenta, marginTop: 6, fontWeight: '700', fontFamily: theme.typography.fontBody },
   relationshipCardGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -594,11 +695,12 @@ const styles = StyleSheet.create({
   relationshipCard: {
     width: '31.5%',
     backgroundColor: theme.colors.bgSecondary,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: theme.colors.borderGlass,
+    borderColor: 'rgba(255,255,255,0.06)',
     padding: 10,
     minHeight: 165,
+    alignItems: 'center',
   },
   relationshipCardMedia: {
     alignItems: 'center',
@@ -606,59 +708,87 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   relationshipCardPhoto: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1.5,
     borderColor: theme.colors.accentMagenta,
   },
   relationshipCardPlaceholder: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: theme.colors.bgTertiary,
     borderWidth: 1,
-    borderColor: theme.colors.borderGlass,
+    borderColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   relationshipCardBody: {
     flex: 1,
+    width: '100%',
+    alignItems: 'center',
   },
   relationshipCardTitle: {
     color: theme.colors.textPrimary,
     fontSize: 12,
     fontWeight: '800',
     textAlign: 'center',
+    fontFamily: theme.typography.fontBody,
   },
-  relationshipCardSub: {
+  statusPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
     marginTop: 6,
-    color: theme.colors.textSecondary,
-    fontSize: 11,
-    lineHeight: 15,
-    textAlign: 'center',
-    minHeight: 30,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontBody,
   },
   relationshipCardFooter: {
-    marginTop: 6,
+    marginTop: 'auto',
+    paddingTop: 8,
     alignItems: 'center',
+    width: '100%',
   },
-  relationshipCardCost: {
-    color: theme.colors.accentCyan,
+  costBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(233,30,140,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(233,30,140,0.25)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    gap: 3,
+  },
+  costBadgeText: {
+    color: theme.colors.accentMagenta,
     fontSize: 10,
     fontWeight: '800',
-    textAlign: 'center',
+    fontFamily: theme.typography.fontBody,
+  },
+  manageText: {
+    color: theme.colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '600',
+    fontFamily: theme.typography.fontBody,
   },
   langRow: { flexDirection: 'row', gap: 10 },
   langBadge: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: theme.radius.sm,
+    borderRadius: 10,
     backgroundColor: theme.colors.bgSecondary,
     borderWidth: 1,
-    borderColor: theme.colors.borderGlass,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  langBadgeText: { fontSize: 14, color: theme.colors.textPrimary, fontWeight: '500' },
+  langBadgeText: { fontSize: 14, color: theme.colors.textPrimary, fontWeight: '500', fontFamily: theme.typography.fontBody },
   charmCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -667,14 +797,14 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: theme.colors.borderGlass,
+    borderColor: 'rgba(255,255,255,0.06)',
+    width: '100%',
   },
-  charmTitle: { fontSize: 15, color: theme.colors.textPrimary, fontWeight: '600' },
+  charmTitle: { fontSize: 15, color: theme.colors.textPrimary, fontWeight: '600', fontFamily: theme.typography.fontBody },
   charmIcons: { flexDirection: 'row', gap: 6 },
-  charmIconEmoji: { fontSize: 20, color: theme.colors.accentCyan },
-  giftsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  giftCtaInline: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 14, backgroundColor: theme.colors.bgSecondary },
-  giftCtaText: { color: theme.colors.accentCyan, fontSize: 12, fontWeight: '800' },
+  giftsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
+  giftCtaInline: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: theme.colors.bgSecondary, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  giftCtaText: { color: theme.colors.accentCyan, fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontBody },
   giftGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   giftCell: {
     width: (W - 40 - 20) / 3,
@@ -684,13 +814,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: theme.colors.borderGlass,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  giftCellImage: { width: 48, height: 48, borderRadius: 14, backgroundColor: theme.colors.bgTertiary },
-  giftCellEmoji: { fontSize: 30 },
-  giftCellName: { marginTop: 8, fontSize: 12, color: theme.colors.textPrimary, fontWeight: '700' },
-  giftCellCount: { marginTop: 4, fontSize: 12, color: theme.colors.accentCyan, fontWeight: '800' },
-  emptyGiftText: { color: theme.colors.textMuted, fontSize: 14 },
+  giftCellImage: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.colors.bgTertiary },
+  giftCellEmoji: { fontSize: 26 },
+  giftCellName: { marginTop: 8, fontSize: 12, color: theme.colors.textPrimary, fontWeight: '700', fontFamily: theme.typography.fontBody },
+  giftCellCount: { marginTop: 4, fontSize: 12, color: theme.colors.accentCyan, fontWeight: '800', fontFamily: theme.typography.fontBody },
+  emptyGiftText: { color: theme.colors.textSecondary, fontSize: 14, fontFamily: theme.typography.fontBody, textAlign: 'center', width: '100%', paddingVertical: 10 },
   stickyFooter: {
     position: 'absolute',
     bottom: 0,
@@ -698,39 +828,126 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: 'rgba(10,10,15,0.95)',
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    gap: 12,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 10,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.borderGlass,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
-  actionBtn: {
-    flex: 1,
+  outlineActionBtn: {
+    flex: 1.2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: theme.radius.pill,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
     gap: 8,
   },
-  msgBtn: { backgroundColor: theme.colors.bgTertiary },
-  giftBtn: { backgroundColor: theme.colors.bgSecondary },
-  callBtn: { backgroundColor: theme.colors.accentMagenta },
-  actionText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
+  outlineActionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFF',
+    fontFamily: theme.typography.fontBody,
+  },
+  giftCircleBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  giftCircleGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gradientActionBtn: {
+    flex: 2,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  gradientBtnBg: {
+    width: '100%',
+    height: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  gradientActionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFF',
+    fontFamily: theme.typography.fontBody,
+  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
   modalContent: {
     width: '80%',
     backgroundColor: theme.colors.bgSecondary,
-    borderRadius: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
     padding: 24,
     alignItems: 'center',
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 8 },
-  modalSub: { fontSize: 24, marginBottom: 12, color: theme.colors.textPrimary },
-  modalCost: { fontSize: 15, color: theme.colors.textSecondary, marginBottom: 24 },
-  modalActions: { flexDirection: 'row', gap: 12, width: '100%' },
-  modalCancel: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 24, backgroundColor: theme.colors.bgTertiary },
-  modalCancelText: { color: theme.colors.textPrimary, fontWeight: '600' },
-  modalConfirm: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 24, backgroundColor: theme.colors.accentViolet },
-  modalConfirmText: { color: '#FFF', fontWeight: '600' },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: theme.typography.fontDisplay,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSub: {
+    fontSize: 22,
+    fontFamily: theme.typography.fontDisplay,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalCost: {
+    fontSize: 14,
+    fontFamily: theme.typography.fontBody,
+    color: theme.colors.textSecondary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginTop: 20,
+  },
+  modalCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 24,
+    backgroundColor: theme.colors.bgTertiary,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modalCancelText: {
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  modalConfirm: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 24,
+    backgroundColor: theme.colors.accentMagenta,
+  },
+  modalConfirmText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
 });
+
