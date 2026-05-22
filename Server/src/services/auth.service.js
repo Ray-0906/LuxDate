@@ -97,7 +97,7 @@ const authService = {
     return { tokens };
   },
 
-  async completeOnboarding(userId, { name, age, gender, username }) {
+  async completeOnboarding(userId, { name, age, gender, username, language, location }) {
     const user = await User.findById(userId);
     if (!user) throw new UnauthorizedError('User not found');
 
@@ -105,6 +105,8 @@ const authService = {
     if (age) user.age = age;
     if (gender) user.gender = gender;
     if (username) user.username = username;
+    if (language) user.language = language;
+    if (location !== undefined) user.location = location;
     await user.save();
     return user;
   },

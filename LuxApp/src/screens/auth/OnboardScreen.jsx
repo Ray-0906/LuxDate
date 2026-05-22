@@ -1,11 +1,13 @@
 // IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Platform, Image, Alert } from 'react-native';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withSpring } from 'react-native-reanimated';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { launchImageLibrary } from 'react-native-image-picker';
 import useAuthStore from '../../store/authStore.js';
 import theme from '../../theme/theme.js';
+import { userApi } from '../../api/services.js';
 import { MeshBackground, GlassInput, PremiumButton } from '../../components/ui.jsx';
 
 function GenderCard({ label, iconName, isActive, onPress }) {
@@ -47,7 +49,10 @@ export default function OnboardScreen() {
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
+  const [location, setLocation] = useState('');
+  const [photoAsset, setPhotoAsset] = useState(null);
   const onboard = useAuthStore((s) => s.onboard);
+  const loadProfile = useAuthStore((s) => s.loadProfile);
   const isLoading = useAuthStore((s) => s.isLoading);
 
   const pulseOpacity = useSharedValue(0.4);
@@ -67,9 +72,43 @@ export default function OnboardScreen() {
     opacity: pulseOpacity.value,
   }));
 
-  const handleSubmit = () => {
-    if (!name || !age || !gender) return;
-    onboard({ name, age: parseInt(age, 10), gender });
+  const handlePickPhoto = async () => {
+    try {
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        quality: 0.85,
+        selectionLimit: 1,
+      });
+      if (!result.didCancel && result.assets?.length) {
+        setPhotoAsset(result.assets[0]);
+      }
+    } catch (error) {
+      Alert.alert('Photo', error?.message || 'Could not select photo.');
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!name || !age || !gender || !location) return;
+    const success = await onboard({ name, age: parseInt(age, 10), gender, location });
+    if (!success) return;
+
+    if (photoAsset?.uri) {
+      try {
+        const formData = new FormData();
+        formData.append('image', {
+          name: photoAsset.fileName || 'profile-photo.jpg',
+          type: photoAsset.type || 'image/jpeg',
+          uri:
+            Platform.OS === 'android'
+              ? photoAsset.uri
+              : photoAsset.uri.replace('file://', ''),
+        });
+        await userApi.uploadPhoto(formData);
+        await loadProfile();
+      } catch (error) {
+        Alert.alert('Photo', error?.response?.data?.message || 'Profile created, but photo upload failed.');
+      }
+    }
   };
 
   return (
@@ -111,6 +150,21 @@ export default function OnboardScreen() {
         </View>
 
         <View style={styles.form}>
+          <Text style={styles.label}>Profile Photo</Text>
+          <TouchableOpacity style={styles.photoPicker} activeOpacity={0.9} onPress={handlePickPhoto}>
+            {photoAsset?.uri ? (
+              <Image source={{ uri: photoAsset.uri }} style={styles.photoPreview} />
+            ) : (
+              <View style={styles.photoPlaceholder}>
+                <Icon name="camera-outline" size={26} color={theme.colors.accentCyan} />
+                <Text style={styles.photoPlaceholderText}>Add profile photo</Text>
+              </View>
+            )}
+            <View style={styles.photoEditBadge}>
+              <Icon name="create-outline" size={14} color={theme.colors.textPrimary} />
+            </View>
+          </TouchableOpacity>
+
           <Text style={styles.label}>Your Name</Text>
           <GlassInput 
             value={name} 
@@ -126,6 +180,14 @@ export default function OnboardScreen() {
             placeholder="Must be 18+" 
             keyboardType="number-pad" 
             maxLength={2}
+          />
+
+          <Text style={styles.label}>City</Text>
+          <GlassInput
+            value={location}
+            onChangeText={setLocation}
+            placeholder="e.g. Mumbai"
+            autoCapitalize="words"
           />
 
           <Text style={styles.label}>I identify as</Text>
@@ -154,7 +216,7 @@ export default function OnboardScreen() {
         <PremiumButton 
           title={isLoading ? 'Creating Profile...' : 'Enter the Club'} 
           onPress={handleSubmit} 
-          disabled={isLoading || !name || !age || !gender} 
+          disabled={isLoading || !name || !age || !gender || !location} 
           colors={theme.gradients.primary}
           glowType={theme.shadow.glowMagenta}
           style={styles.submitBtn}
@@ -199,6 +261,45 @@ const styles = StyleSheet.create({
   },
   
   form: { marginBottom: 40 },
+  photoPicker: {
+    height: 120,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    overflow: 'hidden',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  photoPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  photoPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  photoPlaceholderText: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontBody,
+    fontWeight: '600',
+  },
+  photoEditBadge: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(10,10,15,0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
   label: {
     fontSize: 12,
     fontWeight: '600',

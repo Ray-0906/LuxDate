@@ -46,5 +46,6 @@ export const onboardingSchema = {
     gender: Joi.string().valid('male', 'female', 'other').optional(),
     language: Joi.string().valid('English', 'Hindi', 'Bengali').optional(),
     username: Joi.string().trim().min(3).max(30).optional(),
+    location: Joi.string().trim().max(100).optional(),
   }),
 };
