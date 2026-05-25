@@ -30,33 +30,73 @@ export default function BrandMark({
   const initials = getInitials(appName);
   const hasLogo = !!branding?.appLogoUrl;
 
-  return (
-    <View style={[styles.wrapper, iconOnly && styles.iconOnlyWrapper]}>
-      <View style={[styles.logoBorder, { width: size, height: size, borderRadius: size / 2 }, theme.shadow.glowGold]}>
+return (
+  <View style={[styles.wrapper, iconOnly && styles.iconOnlyWrapper]}>
+    
+    {hasLogo ? (
+      <Image
+        source={{ uri: branding.appLogoUrl }}
+        style={{
+          width: size ,
+          height: size,
+        }}
+        resizeMode="contain"
+      />
+    ) : (
+      <View
+        style={[
+          styles.logoBorder,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+          },
+          theme.shadow.glowGold,
+        ]}
+      >
         <LinearGradient
           colors={theme.gradients.gold}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.logoGradient, { borderRadius: size / 2 }]}
+          style={[
+            styles.logoGradient,
+            { borderRadius: size / 2 },
+          ]}
         >
-          <View style={[styles.logoInner, { borderRadius: (size / 2) - 1 }]}>
-            {hasLogo ? (
-              <Image source={{ uri: branding.appLogoUrl }} style={styles.logoImage} resizeMode="cover" />
-            ) : (
-              <Text style={[styles.logoText, { fontSize: Math.max(20, size * 0.36) }]}>{initials}</Text>
-            )}
+          <View
+            style={[
+              styles.logoInner,
+              { borderRadius: size / 2 - 1 },
+            ]}
+          >
+            <Text
+              style={[
+                styles.logoText,
+                { fontSize: Math.max(20, size * 0.36) },
+              ]}
+            >
+              {initials}
+            </Text>
           </View>
         </LinearGradient>
       </View>
+    )}
 
-      {!iconOnly && showName ? (
-        <View style={styles.wordmarkWrap}>
-          <Text style={[styles.title, titleStyle]}>{appName}</Text>
-          {subtitle ? <Text style={[styles.subtitle, subtitleStyle]}>{subtitle}</Text> : null}
-        </View>
-      ) : null}
-    </View>
-  );
+    {!iconOnly && showName ? (
+      <View style={styles.wordmarkWrap}>
+        <Text style={[styles.title, titleStyle]}>
+          {appName}
+        </Text>
+
+        {subtitle ? (
+          <Text style={[styles.subtitle, subtitleStyle]}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+    ) : null}
+  </View>
+);
 }
 
 const styles = StyleSheet.create({

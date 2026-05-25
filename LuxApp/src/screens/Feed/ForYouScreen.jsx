@@ -63,7 +63,7 @@ export default function ForYouScreen({ navigation }) {
       <View style={styles.header}>
         <View style={styles.headerTitleArea}>
           <View style={styles.logoRow}>
-            <BrandMark size={34} iconOnly />
+            <BrandMark size={54} iconOnly />
             <Text style={styles.logo}>{appName}</Text>
           </View>
           <Text style={styles.socialProof}>
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 0,
   },
   logo: {
     fontSize: 20,

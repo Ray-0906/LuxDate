@@ -31,7 +31,7 @@ export default function LoginScreen({ navigation }) {
         <View style={styles.content}>
           <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.header}>
             <BrandMark
-              size={72}
+              size={115}
               subtitle="Where exclusivity meets desire."
               titleStyle={styles.title}
               subtitleStyle={styles.subtitle}
