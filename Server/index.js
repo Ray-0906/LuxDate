@@ -27,6 +27,7 @@ import feedRoutes from './src/routes/feed.routes.js';
 import userRoutes from './src/routes/user.routes.js';
 import chatRoutes from './src/routes/chat.routes.js';
 import uploadRoutes from './src/routes/upload.routes.js';
+import appRoutes from './src/routes/app.routes.js';
 
 import paymentRoutes from './src/routes/payment.routes.js';
 import giftRoutes from './src/routes/gift.routes.js';
@@ -97,6 +98,7 @@ app.use('/api/feed', feedRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/app', appRoutes);
 
 app.use('/api/payments', paymentRoutes);
 app.use('/api/gifts', giftRoutes);

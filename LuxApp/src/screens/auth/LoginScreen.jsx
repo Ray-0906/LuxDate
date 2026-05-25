@@ -1,11 +1,11 @@
 // IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, StatusBar, KeyboardAvoidingView, Platform } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import LinearGradient from 'react-native-linear-gradient';
 import useAuthStore from '../../store/authStore.js';
 import theme from '../../theme/theme.js';
 import { MeshBackground, PremiumButton } from '../../components/ui.jsx';
+import BrandMark from '../../components/BrandMark.jsx';
 
 export default function LoginScreen({ navigation }) {
   const [phone, setPhone] = useState('');
@@ -30,23 +30,12 @@ export default function LoginScreen({ navigation }) {
       >
         <View style={styles.content}>
           <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.header}>
-            <View style={[styles.logoBorder, theme.shadow.glowGold]}>
-              <LinearGradient
-                colors={theme.gradients.gold}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.logoGradient}
-              >
-                <View style={styles.logoInner}>
-                  <Text style={styles.logoText}>LX</Text>
-                </View>
-              </LinearGradient>
-            </View>
-            
-            <Text style={styles.title}>
-              Lux<Text style={{ color: theme.colors.accentMagenta }}>Date</Text>
-            </Text>
-            <Text style={styles.subtitle}>Where exclusivity meets desire.</Text>
+            <BrandMark
+              size={72}
+              subtitle="Where exclusivity meets desire."
+              titleStyle={styles.title}
+              subtitleStyle={styles.subtitle}
+            />
           </Animated.View>
 
           {error && (
@@ -99,39 +88,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.bgPrimary },
   content: { flex: 1, paddingHorizontal: 32, justifyContent: 'center' },
   header: { alignItems: 'center', marginBottom: 60 },
-  logoBorder: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    overflow: 'hidden',
-    marginBottom: 24,
-  },
-  logoGradient: {
-    flex: 1,
-    padding: 1.5,
-    borderRadius: 36,
-  },
-  logoInner: {
-    flex: 1,
-    backgroundColor: theme.colors.bgTertiary,
-    borderRadius: 35,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    fontSize: 26,
-    fontFamily: theme.typography.fontDisplay,
-    fontWeight: '900',
-    color: theme.colors.accentGoldLight,
-    letterSpacing: -1,
-  },
   title: {
     fontSize: 42,
     fontFamily: theme.typography.fontDisplay,
     fontWeight: '800',
     color: theme.colors.textPrimary,
     letterSpacing: -1,
-    marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {

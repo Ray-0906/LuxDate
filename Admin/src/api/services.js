@@ -66,6 +66,11 @@ export const paymentsAdminApi = {
 export const settingsApi = {
   getAll: (group) => api.get('/admin/settings', { params: { group } }),
   set: (key, value, group, description) => api.post('/admin/settings', { key, value, group, description }),
+  saveAppSettings: (data) => api.post('/admin/settings/app', data),
+  saveBranding: (data) => api.post('/admin/settings/branding', data),
+  uploadBrandingLogo: (formData) => api.post('/admin/settings/branding/logo', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
   delete: (key) => api.delete(`/admin/settings/${key}`),
   seedDefaults: () => api.post('/admin/settings/seed'),
   getCallLogs: (params) => api.get('/admin/settings/call-logs', { params }),

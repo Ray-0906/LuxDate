@@ -1,6 +1,6 @@
 // IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, Pressable, Text, StatusBar, Platform } from 'react-native';
+import { View, StyleSheet, Pressable, Text, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
@@ -8,12 +8,15 @@ import theme from '../../theme/theme.js';
 import HotFeed from './HotFeed.jsx';
 import NearbyFeed from './NearbyFeed.jsx';
 import FilterSheet from './FilterSheet.jsx';
+import BrandMark from '../../components/BrandMark.jsx';
+import useAppSettingsStore from '../../store/appSettingsStore.js';
 
 const TABS = ['Hot', 'Nearby'];
 const TAB_WIDTH = 100;
 
 export default function ForYouScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const appName = useAppSettingsStore((s) => s.settings.branding.appName);
   const [activeTab, setActiveTab] = useState(0);
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState({ region: 'All', language: 'All' });
@@ -60,10 +63,8 @@ export default function ForYouScreen({ navigation }) {
       <View style={styles.header}>
         <View style={styles.headerTitleArea}>
           <View style={styles.logoRow}>
-            <Ionicons name="diamond" size={16} color={theme.colors.accentGold} style={styles.logoIcon} />
-            <Text style={styles.logo}>
-              Lux<Text style={{ color: theme.colors.accentMagenta }}>Date</Text>
-            </Text>
+            <BrandMark size={34} iconOnly />
+            <Text style={styles.logo}>{appName}</Text>
           </View>
           <Text style={styles.socialProof}>
             ✦ {onlineCount} women online now
@@ -133,12 +134,10 @@ const styles = StyleSheet.create({
   logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  logoIcon: {
-    marginRight: 6,
+    gap: 10,
   },
   logo: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: theme.typography.fontDisplay,
     fontWeight: '800',
     color: theme.colors.textPrimary,

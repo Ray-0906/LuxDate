@@ -24,13 +24,17 @@ import InsufficientCoinsModal from '../../components/InsufficientCoinsModal.jsx'
 import CoinPackSheet from '../../components/CoinPackSheet.jsx';
 import useChatUIStore from '../../store/chatUIStore.js';
 import socketService from '../../api/socket.js';
+import useAppSettingsStore from '../../store/appSettingsStore.js';
 
 const { width: W, height: H } = Dimensions.get('window');
 
 export default function VideoCallScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const callData = route.params?.callData || route.params || {};
-  const { girl, callId, videoUrl, callType, coinBalance, costPerMinute = 10 } = callData;
+  const user = useAuthStore((state) => state.user);
+  const callSettings = useAppSettingsStore((s) => s.settings.calls);
+  const defaultCallRate = user?.isVip ? callSettings.vipRate : callSettings.nonVipRate;
+  const { girl, callId, videoUrl, callType, coinBalance, costPerMinute = defaultCallRate } = callData;
   const loadProfile = useAuthStore((state) => state.loadProfile);
   const setActiveCallGirlId = useChatUIStore((state) => state.setActiveCallGirlId);
 

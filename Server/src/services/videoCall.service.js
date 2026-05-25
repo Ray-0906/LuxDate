@@ -2,6 +2,7 @@ import CallSession from '../models/VideoCallLog.js';
 import GirlProfile from '../models/Girl.js';
 import User from '../models/User.js';
 import CoinTransaction from '../models/CoinTransaction.js';
+import appSettingService from './appSetting.service.js';
 import { CALL_STATUS, TRIGGER_TYPES, CALL_TYPES, COIN_TX_TYPES } from '../utils/constants.js';
 
 const videoCallService = {
@@ -24,8 +25,9 @@ const videoCallService = {
     if (!girl) return null;
 
     // Determine call type (free vs paid)
-    const user = await User.findById(userId).select('freeCallsRemaining coinBalance').lean();
+    const user = await User.findById(userId).select('freeCallsRemaining coinBalance isVip').lean();
     const callType = user.freeCallsRemaining > 0 ? CALL_TYPES.FREE : CALL_TYPES.PAID;
+    const costPerMinute = await appSettingService.getCallCostPerMinuteForUser(user);
 
     return {
       girl,
@@ -33,7 +35,7 @@ const videoCallService = {
       callType,
       freeCallsRemaining: user.freeCallsRemaining,
       coinBalance: user.coinBalance,
-      costPerMinute: 10,
+      costPerMinute,
     };
   },
 
@@ -58,7 +60,7 @@ const videoCallService = {
     if (session.callType === CALL_TYPES.PAID && status === CALL_STATUS.ACCEPTED) {
       const user = await User.findById(userId);
       if (user && session.startedAt) {
-        const costPerMinute = 10;
+        const costPerMinute = await appSettingService.getCallCostPerMinuteForUser(user);
         const durationMs = session.endedAt.getTime() - session.startedAt.getTime();
         let durationMins = Math.ceil(durationMs / 60000);
         if (durationMins < 1) durationMins = 1;
@@ -141,7 +143,7 @@ const videoCallService = {
       await user.save();
     } else {
       // Paid call — check coin balance but don't deduct yet
-      const costPerMinute = 10; // from app_settings
+      const costPerMinute = await appSettingService.getCallCostPerMinuteForUser(user);
       if (user.coinBalance < costPerMinute) {
         return { error: true, paywallType: 'coins_only', coinBalance: user.coinBalance };
       }
@@ -155,7 +157,8 @@ const videoCallService = {
       await session.save();
     }
 
-    return { session, coinBalance: user.coinBalance, costPerMinute: 10 };
+    const costPerMinute = await appSettingService.getCallCostPerMinuteForUser(user);
+    return { session, coinBalance: user.coinBalance, costPerMinute };
   },
 
   /**

@@ -10,10 +10,16 @@ import socketService from './src/api/socket.js';
 import useAuthStore from './src/store/authStore.js';
 import useChatBadgeStore from './src/store/chatBadgeStore.js';
 import { paymentsApi } from './src/api/services.js';
+import useAppSettingsStore from './src/store/appSettingsStore.js';
 
 const App = () => {
   const appState = useRef(AppState.currentState);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const bootstrapAppSettings = useAppSettingsStore((s) => s.bootstrap);
+
+  useEffect(() => {
+    bootstrapAppSettings().catch(() => {});
+  }, [bootstrapAppSettings]);
 
   useEffect(() => {
     if (!isAuthenticated) {

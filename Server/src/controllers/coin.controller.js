@@ -14,15 +14,16 @@ const coinController = {
 
   async getEconomy(req, res, next) {
     try {
-      const [callCostPerMinute, minCoinsForCall, freeCheckin] = await Promise.all([
-        appSettingService.get('call_cost_per_minute'),
-        appSettingService.get('min_coins_for_call'),
+      const [pricing, freeCheckin] = await Promise.all([
+        appSettingService.getCallPricingSettings(),
         appSettingService.get('free_login_checkin_coins'),
       ]);
       return ApiResponse.success(res, {
         data: {
-          callCostPerMinute: callCostPerMinute ?? 10,
-          minCoinsForCall: minCoinsForCall ?? 20,
+          callCostPerMinute: req.user?.isVip ? pricing.vipRate : pricing.nonVipRate,
+          callCostPerMinuteNonVip: pricing.nonVipRate,
+          callCostPerMinuteVip: pricing.vipRate,
+          minCoinsForCall: pricing.minCoinsForCall,
           freeLoginCheckinCoins: freeCheckin ?? 5,
         },
       });

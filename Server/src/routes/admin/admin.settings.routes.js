@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import adminSettingsController from '../../controllers/admin/adminSettings.controller.js';
 import { authenticateAdmin, requirePermission } from '../../middleware/admin.middleware.js';
+import { uploadSingleImage } from '../../middleware/upload.middleware.js';
 import { ADMIN_PERMISSIONS } from '../../utils/constants.js';
 
 const router = Router();
@@ -8,6 +9,9 @@ router.use(authenticateAdmin, requirePermission(ADMIN_PERMISSIONS.MANAGE_SETTING
 
 router.get('/', adminSettingsController.getAll);
 router.post('/', adminSettingsController.set);
+router.post('/app', adminSettingsController.saveAppSettings);
+router.post('/branding', adminSettingsController.saveBranding);
+router.post('/branding/logo', uploadSingleImage, adminSettingsController.uploadBrandingLogo);
 router.delete('/:key', adminSettingsController.delete);
 router.post('/seed', adminSettingsController.seedDefaults);
 router.get('/call-logs', adminSettingsController.getCallLogs);

@@ -7,6 +7,10 @@ export const authApi = {
   onboard: (data) => api.post('/auth/onboarding', data),
 };
 
+export const appApi = {
+  settings: () => api.get('/app/settings'),
+};
+
 export const profilesApi = {
   hot: (params) => api.get('/feed/hot', { params }),
   nearby: (params) => api.get('/feed/nearby', { params }),

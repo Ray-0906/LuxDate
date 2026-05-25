@@ -9,6 +9,7 @@ import useAuthStore from '../../store/authStore.js';
 import theme from '../../theme/theme.js';
 import { userApi } from '../../api/services.js';
 import { MeshBackground, GlassInput, PremiumButton } from '../../components/ui.jsx';
+import useAppSettingsStore from '../../store/appSettingsStore.js';
 
 function GenderCard({ label, iconName, isActive, onPress }) {
   const scale = useSharedValue(1);
@@ -46,6 +47,7 @@ function GenderCard({ label, iconName, isActive, onPress }) {
 }
 
 export default function OnboardScreen() {
+  const appName = useAppSettingsStore((s) => s.settings.branding.appName);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
@@ -145,7 +147,7 @@ export default function OnboardScreen() {
         </View>
 
         <View style={styles.headerWrap}>
-          <Text style={styles.title}>Welcome to LuxDate</Text>
+          <Text style={styles.title}>Welcome to {appName}</Text>
           <Text style={styles.subtitle}>Curated matching for the elite.</Text>
         </View>
 

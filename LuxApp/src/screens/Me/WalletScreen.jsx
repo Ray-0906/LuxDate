@@ -8,14 +8,17 @@ import LinearGradient from 'react-native-linear-gradient';
 import theme from '../../theme/theme.js';
 import useAuthStore from '../../store/authStore.js';
 import { coinsApi } from '../../api/services.js';
+import useAppSettingsStore from '../../store/appSettingsStore.js';
 
 export default function WalletScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const loadProfile = useAuthStore((s) => s.loadProfile);
+  const callSettings = useAppSettingsStore((s) => s.settings.calls);
+  const defaultCallRate = user?.isVip ? callSettings.vipRate : callSettings.nonVipRate;
 
   const [loading, setLoading] = useState(true);
-  const [callCostPerMinute, setCallCostPerMinute] = useState(50); // Default fallback
+  const [callCostPerMinute, setCallCostPerMinute] = useState(defaultCallRate);
   const [quickPacks, setQuickPacks] = useState([]);
 
   useFocusEffect(
@@ -58,7 +61,7 @@ export default function WalletScreen({ navigation }) {
   );
 
   const coinBalance = user?.coinBalance ?? 0;
-  const minutesAvailable = Math.floor(coinBalance / (callCostPerMinute || 50));
+  const minutesAvailable = Math.floor(coinBalance / (callCostPerMinute || defaultCallRate || 10));
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -334,4 +337,3 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
 });
-
