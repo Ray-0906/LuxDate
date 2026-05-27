@@ -1,7 +1,7 @@
 // IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Image, Pressable, Dimensions, Vibration,
+  View, Text, StyleSheet, Image, Pressable, Dimensions, Vibration, Alert,
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming,
@@ -12,15 +12,18 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import theme from '../../theme/theme.js';
 import { callsApi } from '../../api/services.js';
 import CoinPackSheet from '../../components/CoinPackSheet.jsx';
+import usePermissionStore from '../../store/permissionStore.js';
 
 const { width: W, height: H } = Dimensions.get('window');
 
 export default function IncomingCallScreen({ route, navigation }) {
   const callData = route.params?.callData || route.params || {};
-  const { girl, callId, triggerType, videoUrl, callType } = callData;
+  const { girl, callId, callType } = callData;
   const timerRef = useRef(null);
   const ringTimeoutRef = useRef(null);
   const [showCoinSheet, setShowCoinSheet] = useState(false);
+  const requestPermission = usePermissionStore((s) => s.requestPermission);
+  const openAppSettings = usePermissionStore((s) => s.openAppSettings);
 
   // Pulse animation for accept button
   const pulseScale = useSharedValue(1);
@@ -93,11 +96,56 @@ export default function IncomingCallScreen({ route, navigation }) {
     opacity: ring2Opacity.value,
   }));
 
+  const ensureCallPermissions = async () => {
+    const cameraGranted = await requestPermission('camera');
+    if (!cameraGranted) {
+      const blocked = usePermissionStore.getState().statuses.camera === 'blocked';
+      Alert.alert(
+        'Camera permission needed',
+        blocked
+          ? 'Please enable camera access from Android settings before joining the call.'
+          : 'Please allow camera access before joining the call.',
+        blocked
+          ? [
+              { text: 'Not now', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => openAppSettings().catch(() => {}) },
+            ]
+          : [{ text: 'OK', style: 'default' }]
+      );
+      return false;
+    }
+
+    const microphoneGranted = await requestPermission('microphone');
+    if (!microphoneGranted) {
+      const blocked = usePermissionStore.getState().statuses.microphone === 'blocked';
+      Alert.alert(
+        'Microphone permission needed',
+        blocked
+          ? 'Please enable microphone access from Android settings before joining the call.'
+          : 'Please allow microphone access before joining the call.',
+        blocked
+          ? [
+              { text: 'Not now', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => openAppSettings().catch(() => {}) },
+            ]
+          : [{ text: 'OK', style: 'default' }]
+      );
+      return false;
+    }
+
+    return true;
+  };
+
   const handleAccept = async () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     Vibration.cancel();
     
     try {
+      const permissionsReady = await ensureCallPermissions();
+      if (!permissionsReady) {
+        timerRef.current = setTimeout(() => handleMiss(), 30000);
+        return;
+      }
       let finalCallData = { ...callData };
       if (callId) {
         const response = await callsApi.accept(callId);

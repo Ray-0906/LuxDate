@@ -1,6 +1,6 @@
 // IMPECCABLE_PREFLIGHT: context=pass product=pass command_reference=pass shape=pass image_gate=pass mutation=open
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Image, Dimensions, TouchableOpacity, Pressable, Alert } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import theme from '../../theme/theme.js';
@@ -9,6 +9,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Eas
 import TriggerEngine from '../../engines/TriggerEngine.js';
 import CoinPackSheet from '../../components/CoinPackSheet.jsx';
 import LinearGradient from 'react-native-linear-gradient';
+import usePermissionStore from '../../store/permissionStore.js';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -19,15 +20,62 @@ export default function OutgoingCallScreen({ route, navigation }) {
 
   const [statusText, setStatusText] = useState('Calling...');
   const [showCoinSheet, setShowCoinSheet] = useState(false);
+  const requestPermission = usePermissionStore((s) => s.requestPermission);
+  const openAppSettings = usePermissionStore((s) => s.openAppSettings);
 
   const ring1Scale = useSharedValue(1);
   const ring1Opacity = useSharedValue(0.6);
   const ring2Scale = useSharedValue(1);
   const ring2Opacity = useSharedValue(0.6);
 
+  const ensureCallPermissions = useCallback(async () => {
+    const cameraGranted = await requestPermission('camera');
+    if (!cameraGranted) {
+      const blocked = usePermissionStore.getState().statuses.camera === 'blocked';
+      Alert.alert(
+        'Camera permission needed',
+        blocked
+          ? 'Please enable camera access from Android settings before placing the call.'
+          : 'Please allow camera access before placing the call.',
+        blocked
+          ? [
+              { text: 'Not now', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => openAppSettings().catch(() => {}) },
+            ]
+          : [{ text: 'OK', style: 'default' }]
+      );
+      return false;
+    }
+
+    const microphoneGranted = await requestPermission('microphone');
+    if (!microphoneGranted) {
+      const blocked = usePermissionStore.getState().statuses.microphone === 'blocked';
+      Alert.alert(
+        'Microphone permission needed',
+        blocked
+          ? 'Please enable microphone access from Android settings before placing the call.'
+          : 'Please allow microphone access before placing the call.',
+        blocked
+          ? [
+              { text: 'Not now', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => openAppSettings().catch(() => {}) },
+            ]
+          : [{ text: 'OK', style: 'default' }]
+      );
+      return false;
+    }
+
+    return true;
+  }, [openAppSettings, requestPermission]);
+
   const tryAccept = useCallback(async () => {
     setStatusText('Connecting...');
     try {
+      const permissionsReady = await ensureCallPermissions();
+      if (!permissionsReady) {
+        setStatusText('Camera and mic access needed.');
+        return;
+      }
       const res = await callsApi.accept(girl._id, { params: { isDirect: true } });
       const data = res.data.data;
 
@@ -52,7 +100,7 @@ export default function OutgoingCallScreen({ route, navigation }) {
         setTimeout(() => navigation.goBack(), 2000);
       }
     }
-  }, [girl, navigation]);
+  }, [ensureCallPermissions, girl, navigation]);
 
   useEffect(() => {
     TriggerEngine.setBlockedContext(true);

@@ -21,6 +21,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import theme from '../../theme/theme.js';
 import useAuthStore from '../../store/authStore.js';
 import { userApi } from '../../api/services.js';
+import usePermissionStore from '../../store/permissionStore.js';
 
 const { width: W } = Dimensions.get('window');
 
@@ -68,6 +69,8 @@ export default function EditProfileScreen({ navigation, route }) {
   const [selectedPhotoAsset, setSelectedPhotoAsset] = useState(null);
   const [screenError, setScreenError] = useState('');
   const baselineRef = useRef(normalizeDraft(buildDraft(user)));
+  const requestPermission = usePermissionStore((s) => s.requestPermission);
+  const openAppSettings = usePermissionStore((s) => s.openAppSettings);
 
   useEffect(() => {
     let mounted = true;
@@ -150,6 +153,23 @@ export default function EditProfileScreen({ navigation, route }) {
   const handlePickPhoto = async () => {
     if (!isEditing || isSaving) return;
     try {
+      const granted = await requestPermission('photos');
+      if (!granted) {
+        const blocked = usePermissionStore.getState().statuses.photos === 'blocked';
+        Alert.alert(
+          'Photo permission needed',
+          blocked
+            ? 'Please enable photo access from Android settings to update your profile image.'
+            : 'Please allow photo access to choose a profile image.',
+          blocked
+            ? [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'Open Settings', onPress: () => openAppSettings().catch(() => {}) },
+              ]
+            : [{ text: 'OK', style: 'default' }]
+        );
+        return;
+      }
       const result = await launchImageLibrary({
         mediaType: 'photo',
         quality: 0.85,

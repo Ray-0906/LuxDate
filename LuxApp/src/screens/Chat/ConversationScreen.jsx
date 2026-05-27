@@ -12,7 +12,7 @@ import {
   Platform,
   ActivityIndicator,
   Keyboard,
-  PermissionsAndroid,
+  Alert,
   Modal,
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
@@ -32,6 +32,7 @@ import GiftPickerModal from '../../components/GiftPickerModal.jsx';
 import GiftBurstOverlay from '../../components/GiftBurstOverlay.jsx';
 import InsufficientCoinsModal from '../../components/InsufficientCoinsModal.jsx';
 import CoinPackSheet from '../../components/CoinPackSheet.jsx';
+import usePermissionStore from '../../store/permissionStore.js';
 
 export default function ConversationScreen({ route, navigation }) {
   const { girl } = route.params || {};
@@ -57,6 +58,8 @@ export default function ConversationScreen({ route, navigation }) {
     s => s.setActiveConversationGirlId,
   );
   const refreshUnreadCount = useChatBadgeStore(s => s.refreshUnreadCount);
+  const requestPermission = usePermissionStore((s) => s.requestPermission);
+  const openAppSettings = usePermissionStore((s) => s.openAppSettings);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -145,25 +148,28 @@ export default function ConversationScreen({ route, navigation }) {
     }
   };
 
-  const requestGalleryPermission = async () => {
-    if (Platform.OS === 'android') {
-      if (Platform.Version >= 33) {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      }
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    }
-    return true;
+  const showPermissionAlert = (permissionKey, featureName) => {
+    const blocked = usePermissionStore.getState().statuses[permissionKey] === 'blocked';
+    Alert.alert(
+      `${featureName} needs permission`,
+      blocked
+        ? `Please enable ${featureName.toLowerCase()} access from Android settings.`
+        : `Please allow ${featureName.toLowerCase()} access to continue.`,
+      blocked
+        ? [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => openAppSettings().catch(() => {}) },
+          ]
+        : [{ text: 'OK', style: 'default' }]
+    );
   };
 
   const loadRecentPhotos = async () => {
-    const hasPermission = await requestGalleryPermission();
-    if (!hasPermission) return;
+    const hasPermission = await requestPermission('photos');
+    if (!hasPermission) {
+      showPermissionAlert('photos', 'Photo library');
+      return false;
+    }
     try {
       const photos = await CameraRoll.getPhotos({
         first: 20,
@@ -173,9 +179,10 @@ export default function ConversationScreen({ route, navigation }) {
     } catch (e) {
       console.warn('CameraRoll error: ', e);
     }
+    return true;
   };
 
-  const toggleAttachment = () => {
+  const toggleAttachment = async () => {
     if (isAttachmentOpen) {
       setIsAttachmentOpen(false);
       setTimeout(() => inputRef.current?.focus(), 100);
@@ -183,12 +190,18 @@ export default function ConversationScreen({ route, navigation }) {
     }
     Keyboard.dismiss();
     setIsEmojiOpen(false);
-    loadRecentPhotos();
+    const loaded = await loadRecentPhotos();
+    if (!loaded) return;
     setTimeout(() => setIsAttachmentOpen(true), 50);
   };
 
   const openCamera = async () => {
     try {
+      const cameraGranted = await requestPermission('camera');
+      if (!cameraGranted) {
+        showPermissionAlert('camera', 'Camera');
+        return;
+      }
       const result = await launchCamera({
         mediaType: 'photo',
         quality: 0.7,
@@ -205,6 +218,11 @@ export default function ConversationScreen({ route, navigation }) {
 
   const openFullGallery = async () => {
     try {
+      const photosGranted = await requestPermission('photos');
+      if (!photosGranted) {
+        showPermissionAlert('photos', 'Photo library');
+        return;
+      }
       const result = await launchImageLibrary({
         mediaType: 'photo',
         quality: 0.7,

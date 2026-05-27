@@ -10,6 +10,7 @@ import theme from '../../theme/theme.js';
 import { userApi } from '../../api/services.js';
 import { MeshBackground, GlassInput, PremiumButton } from '../../components/ui.jsx';
 import useAppSettingsStore from '../../store/appSettingsStore.js';
+import usePermissionStore from '../../store/permissionStore.js';
 
 function GenderCard({ label, iconName, isActive, onPress }) {
   const scale = useSharedValue(1);
@@ -56,6 +57,8 @@ export default function OnboardScreen() {
   const onboard = useAuthStore((s) => s.onboard);
   const loadProfile = useAuthStore((s) => s.loadProfile);
   const isLoading = useAuthStore((s) => s.isLoading);
+  const requestPermission = usePermissionStore((s) => s.requestPermission);
+  const openAppSettings = usePermissionStore((s) => s.openAppSettings);
 
   const pulseOpacity = useSharedValue(0.4);
 
@@ -76,6 +79,23 @@ export default function OnboardScreen() {
 
   const handlePickPhoto = async () => {
     try {
+      const granted = await requestPermission('photos');
+      if (!granted) {
+        const blocked = usePermissionStore.getState().statuses.photos === 'blocked';
+        Alert.alert(
+          'Photo permission needed',
+          blocked
+            ? 'Please enable photo access from Android settings to add a profile photo.'
+            : 'Please allow photo access to continue.',
+          blocked
+            ? [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'Open Settings', onPress: () => openAppSettings().catch(() => {}) },
+              ]
+            : [{ text: 'OK', style: 'default' }]
+        );
+        return;
+      }
       const result = await launchImageLibrary({
         mediaType: 'photo',
         quality: 0.85,

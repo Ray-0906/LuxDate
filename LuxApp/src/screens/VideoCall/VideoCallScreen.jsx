@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { VideoView, useVideoPlayer } from 'react-native-video';
-import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import theme from '../../theme/theme.js';
 import { callsApi, coinsApi } from '../../api/services.js';
 import useAuthStore from '../../store/authStore.js';
@@ -25,6 +25,7 @@ import CoinPackSheet from '../../components/CoinPackSheet.jsx';
 import useChatUIStore from '../../store/chatUIStore.js';
 import socketService from '../../api/socket.js';
 import useAppSettingsStore from '../../store/appSettingsStore.js';
+import usePermissionStore from '../../store/permissionStore.js';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -57,7 +58,7 @@ export default function VideoCallScreen({ route, navigation }) {
   const giftBurstTimerRef = useRef(null);
 
   const device = useCameraDevice('front');
-  const { hasPermission, requestPermission } = useCameraPermission();
+  const permissionStatuses = usePermissionStore((s) => s.statuses);
 
   const player = useVideoPlayer(videoUrl ? { uri: videoUrl } : null, (instance) => {
     instance.loop = true;
@@ -97,12 +98,6 @@ export default function VideoCallScreen({ route, navigation }) {
       subError.remove();
     };
   }, [player]);
-
-  useEffect(() => {
-    if (!hasPermission) {
-      requestPermission();
-    }
-  }, [hasPermission, requestPermission]);
 
   useEffect(() => {
     const handleNewMessage = (data) => {
@@ -254,7 +249,7 @@ export default function VideoCallScreen({ route, navigation }) {
         </View>
       )}
 
-      {hasPermission && device && !isLocalVideoDisabled && (
+      {permissionStatuses.camera === 'granted' && device && !isLocalVideoDisabled && (
         <View style={[styles.pipContainer, { top: insets.top + 80 }]}>
           <Camera
             style={StyleSheet.absoluteFill}

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import notifee from '@notifee/react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,15 +11,60 @@ import useAuthStore from './src/store/authStore.js';
 import useChatBadgeStore from './src/store/chatBadgeStore.js';
 import { paymentsApi } from './src/api/services.js';
 import useAppSettingsStore from './src/store/appSettingsStore.js';
+import usePermissionStore from './src/store/permissionStore.js';
 
 const App = () => {
   const appState = useRef(AppState.currentState);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
+  const isOnboarded = !!user?.name;
   const bootstrapAppSettings = useAppSettingsStore((s) => s.bootstrap);
+  const refreshPermissions = usePermissionStore((s) => s.refreshStatuses);
+  const requestPermissions = usePermissionStore((s) => s.requestPermissions);
 
   useEffect(() => {
     bootstrapAppSettings().catch(() => {});
   }, [bootstrapAppSettings]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return undefined;
+    refreshPermissions().catch(() => {});
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        refreshPermissions().catch(() => {});
+      }
+    });
+    return () => subscription.remove();
+  }, [refreshPermissions]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !isAuthenticated || !isOnboarded) {
+      return undefined;
+    }
+
+    const promptMissingPermissions = async () => {
+      const statuses = await refreshPermissions().catch(() => null);
+      if (!statuses) return;
+
+      const missing = Object.entries(statuses)
+        .filter(([, status]) => status === 'denied')
+        .map(([key]) => key);
+
+      if (missing.length > 0) {
+        await requestPermissions(missing).catch(() => {});
+      }
+    };
+
+    promptMissingPermissions();
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        promptMissingPermissions();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [isAuthenticated, isOnboarded, refreshPermissions, requestPermissions]);
 
   useEffect(() => {
     if (!isAuthenticated) {
