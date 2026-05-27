@@ -69,13 +69,13 @@ export default function OutgoingCallScreen({ route, navigation }) {
   }, [openAppSettings, requestPermission]);
 
   const tryAccept = useCallback(async () => {
-    setStatusText('Connecting...');
     try {
       const permissionsReady = await ensureCallPermissions();
       if (!permissionsReady) {
         setStatusText('Camera and mic access needed.');
         return;
       }
+      setStatusText('Connecting...');
       const res = await callsApi.accept(girl._id, { params: { isDirect: true } });
       const data = res.data.data;
 

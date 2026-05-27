@@ -137,15 +137,13 @@ export default function IncomingCallScreen({ route, navigation }) {
   };
 
   const handleAccept = async () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    Vibration.cancel();
-    
     try {
       const permissionsReady = await ensureCallPermissions();
       if (!permissionsReady) {
-        timerRef.current = setTimeout(() => handleMiss(), 30000);
         return;
       }
+      if (timerRef.current) clearTimeout(timerRef.current);
+      Vibration.cancel();
       let finalCallData = { ...callData };
       if (callId) {
         const response = await callsApi.accept(callId);

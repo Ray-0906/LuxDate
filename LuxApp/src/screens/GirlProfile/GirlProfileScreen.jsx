@@ -27,6 +27,7 @@ import GiftBurstOverlay from '../../components/GiftBurstOverlay.jsx';
 import InsufficientCoinsModal from '../../components/InsufficientCoinsModal.jsx';
 import CoinPackSheet from '../../components/CoinPackSheet.jsx';
 import useAuthStore from '../../store/authStore.js';
+import usePermissionStore from '../../store/permissionStore.js';
 
 const { width: W } = Dimensions.get('window');
 
@@ -52,6 +53,8 @@ export default function GirlProfileScreen({ route, navigation }) {
   const [giftBurst, setGiftBurst] = useState(null);
   const user = useAuthStore((s) => s.user);
   const loadProfile = useAuthStore((s) => s.loadProfile);
+  const requestPermission = usePermissionStore((s) => s.requestPermission);
+  const openAppSettings = usePermissionStore((s) => s.openAppSettings);
 
   useProfileCallTrigger(girl?._id, !!girl && isFocused);
 
@@ -178,8 +181,44 @@ export default function GirlProfileScreen({ route, navigation }) {
 
   const photos = girl.photos?.length ? girl.photos : ['https://via.placeholder.com/400'];
 
-  const handleVideoCall = () => {
+  const handleVideoCall = async () => {
     TriggerEngine.cancelScheduled();
+    const cameraGranted = await requestPermission('camera');
+    if (!cameraGranted) {
+      const blocked = usePermissionStore.getState().statuses.camera === 'blocked';
+      Alert.alert(
+        'Camera permission needed',
+        blocked
+          ? 'Please enable camera access from Android settings before placing the call.'
+          : 'Please allow camera access before placing the call.',
+        blocked
+          ? [
+              { text: 'Not now', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => openAppSettings().catch(() => {}) },
+            ]
+          : [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+
+    const microphoneGranted = await requestPermission('microphone');
+    if (!microphoneGranted) {
+      const blocked = usePermissionStore.getState().statuses.microphone === 'blocked';
+      Alert.alert(
+        'Microphone permission needed',
+        blocked
+          ? 'Please enable microphone access from Android settings before placing the call.'
+          : 'Please allow microphone access before placing the call.',
+        blocked
+          ? [
+              { text: 'Not now', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => openAppSettings().catch(() => {}) },
+            ]
+          : [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+
     if (girl?._id) {
       navigation.navigate('OutgoingCall', { girl });
     }
@@ -950,4 +989,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-

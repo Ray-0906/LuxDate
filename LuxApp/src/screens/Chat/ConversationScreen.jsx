@@ -286,8 +286,25 @@ export default function ConversationScreen({ route, navigation }) {
   };
 
   const handleVideoCall = () => {
-    TriggerEngine.cancelScheduled();
-    navigation.navigate('OutgoingCall', { girl });
+    const startCall = async () => {
+      TriggerEngine.cancelScheduled();
+
+      const cameraGranted = await requestPermission('camera');
+      if (!cameraGranted) {
+        showPermissionAlert('camera', 'Camera');
+        return;
+      }
+
+      const microphoneGranted = await requestPermission('microphone');
+      if (!microphoneGranted) {
+        showPermissionAlert('microphone', 'Microphone');
+        return;
+      }
+
+      navigation.navigate('OutgoingCall', { girl });
+    };
+
+    startCall().catch(() => {});
   };
 
   const handleGiftSent = result => {
