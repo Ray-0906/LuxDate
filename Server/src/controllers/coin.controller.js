@@ -62,7 +62,13 @@ const coinController = {
       if (!result.success) {
         return ApiResponse.success(res, { data: result, message: result.message || 'Check-in not available' });
       }
-      return ApiResponse.success(res, { data: result, message: `Claimed ${result.coins} coins!` });
+      const status = !req.body?.subscriptionId && !req.body?.planId
+        ? await MonetizationController.getCheckinStatus(req.user._id)
+        : null;
+      return ApiResponse.success(
+        res,
+        { data: status ? { ...result, status } : result, message: `Claimed ${result.coins} coins!` }
+      );
     } catch (e) { next(e); }
   },
 

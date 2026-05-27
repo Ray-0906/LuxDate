@@ -3,6 +3,7 @@ import { NotFoundError } from '../utils/errors.js';
 import logger from '../utils/logger.js';
 
 const BRANDING_KEYS = new Set(['app_name', 'app_logo_url']);
+const NEW_USER_CHECKIN_DEFAULTS = [5, 10, 15, 20, 25, 30, 50];
 const DEFAULT_APP_SETTINGS = {
   branding: {
     appName: 'LuxDate',
@@ -86,6 +87,12 @@ const appSettingService = {
         { coins: 3000, price: 899, label: 'Premium' },
       ], group: 'coins', description: 'Coin purchase packages (legacy JSON; prefer CoinPack model)' },
       { key: 'free_login_checkin_coins', value: 5, group: 'coins', description: 'Daily check-in reward for non-VIP users' },
+      ...NEW_USER_CHECKIN_DEFAULTS.map((coins, index) => ({
+        key: `checkin_day_${index + 1}_coins`,
+        value: coins,
+        group: 'coins',
+        description: `New-user check-in reward for Day ${index + 1}`,
+      })),
       { key: 'app_name', value: 'LuxDate', group: 'branding', description: 'Application name' },
       { key: 'app_logo_url', value: '', group: 'branding', description: 'Remote application logo URL' },
       { key: 'app_branding_revision', value: 1, group: 'branding', description: 'Incremented whenever branding changes' },
@@ -119,6 +126,15 @@ const appSettingService = {
   async getCallCostPerMinuteForUser(user = null) {
     const pricing = await this.getCallPricingSettings();
     return user?.isVip ? pricing.vipRate : pricing.nonVipRate;
+  },
+
+  async getNewUserCheckinRewards() {
+    const keys = NEW_USER_CHECKIN_DEFAULTS.map((_, index) => `checkin_day_${index + 1}_coins`);
+    const values = await Promise.all(keys.map((key) => this.get(key)));
+    return values.map((value, index) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : NEW_USER_CHECKIN_DEFAULTS[index];
+    });
   },
 
   async getPublicAppSettingsPayload() {

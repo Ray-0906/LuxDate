@@ -11,8 +11,12 @@ import theme from '../../theme/theme.js';
 import useAuthStore from '../../store/authStore.js';
 import { vipApi, coinsApi, relationshipsApi } from '../../api/services.js';
 import RelationshipEngine from '../../engines/RelationshipEngine.js';
+import mmkvStorage from '../../utils/storage.js';
+import DailyCheckinModal from '../../components/DailyCheckinModal.jsx';
+import FloatingCheckinButton from '../../components/FloatingCheckinButton.jsx';
 
 const WEALTH_COLORS = ['#9B9BC0', '#B0B0D8', '#C9A84C', '#FFD700', '#FF5B84', '#E91E8C', '#7C3AED'];
+const CHECKIN_DISMISS_KEY = 'new_user_checkin_fab_dismissed_day';
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -22,13 +26,39 @@ export default function ProfileScreen({ navigation }) {
   const loadProfile = useAuthStore((s) => s.loadProfile);
 
   const [checkinInfo, setCheckinInfo] = useState(null);
+  const [checkinModalVisible, setCheckinModalVisible] = useState(false);
+  const [checkinDismissed, setCheckinDismissed] = useState(false);
   const [postNudge, setPostNudge] = useState(null);
   const [myConnections, setMyConnections] = useState([]);
+
+  const syncCheckinDismissal = useCallback((info) => {
+    const dismissedDay = mmkvStorage.getItem(CHECKIN_DISMISS_KEY);
+    if (info?.canClaimToday && info?.todayKey && dismissedDay !== info.todayKey) {
+      mmkvStorage.removeItem(CHECKIN_DISMISS_KEY);
+      setCheckinDismissed(false);
+      return;
+    }
+    setCheckinDismissed(!!(dismissedDay && dismissedDay === info?.todayKey));
+  }, []);
+
+  const refreshCheckinStatus = useCallback(async () => {
+    try {
+      const res = await coinsApi.checkinStatus();
+      const info = res.data?.data || null;
+      setCheckinInfo(info);
+      syncCheckinDismissal(info);
+      return info;
+    } catch {
+      setCheckinInfo(null);
+      setCheckinDismissed(false);
+      return null;
+    }
+  }, [syncCheckinDismissal]);
 
   useFocusEffect(
     useCallback(() => {
       loadProfile();
-      coinsApi.checkinStatus().then((r) => setCheckinInfo(r.data?.data)).catch(() => setCheckinInfo(null));
+      refreshCheckinStatus();
       vipApi.status().then((r) => {
         const d = r.data?.data;
         if (d?.justExpired) {
@@ -43,7 +73,7 @@ export default function ProfileScreen({ navigation }) {
         setPostNudge(p);
         navigation.setParams({ postCallTopUp: undefined });
       }
-    }, [loadProfile, navigation, route.params])
+    }, [loadProfile, navigation, refreshCheckinStatus, route.params])
   );
 
   const wealthColor = WEALTH_COLORS[Math.min(user?.wealthLevel || 0, WEALTH_COLORS.length - 1)];
@@ -56,27 +86,39 @@ export default function ProfileScreen({ navigation }) {
     { icon: 'receipt-outline', label: 'Transactions', screen: 'TransactionHistory', color: theme.colors.textSecondary },
   ];
 
-  const claimCheckin = async () => {
+  const claimCheckin = async (dayNumber) => {
     try {
-      const res = await coinsApi.checkinClaim();
+      const res = await coinsApi.checkinClaim({ dayNumber });
       const d = res.data?.data;
       if (!d?.success && d?.error === 'already_claimed_today') {
         await loadProfile();
+        await refreshCheckinStatus();
         Alert.alert('Check-in', 'Already claimed today. Come back tomorrow!');
-        return;
+        return { success: false };
       }
       if (!d?.success) {
         Alert.alert('Check-in', d?.message || 'Unable to claim');
-        return;
+        return { success: false };
       }
       await loadProfile();
-      Alert.alert('Check-in', `+${d.coins} coins`);
-      const st = await coinsApi.checkinStatus();
-      setCheckinInfo(st.data?.data);
+      const nextStatus = d?.status || (await refreshCheckinStatus());
+      if (d?.status) {
+        setCheckinInfo(d.status);
+        syncCheckinDismissal(d.status);
+      }
+      return { success: true, dayNumber: d.dayNumber, status: nextStatus };
     } catch (e) {
       Alert.alert('Check-in', e?.response?.data?.message || e.message || 'Failed');
+      return { success: false };
     }
   };
+
+  const dismissFloatingCheckin = useCallback(() => {
+    if (checkinInfo?.todayKey) {
+      mmkvStorage.setItem(CHECKIN_DISMISS_KEY, checkinInfo.todayKey);
+    }
+    setCheckinDismissed(true);
+  }, [checkinInfo?.todayKey]);
 
   const handleBreakBond = async (slot) => {
     const rel = slot?.relationship;
@@ -125,6 +167,11 @@ export default function ProfileScreen({ navigation }) {
     }
     return theme.colors.accentGold;
   };
+
+  const selectedDefaultDay = checkinInfo?.selectedDefaultDay;
+  const selectedDayCard = (checkinInfo?.days || []).find((day) => day.day === selectedDefaultDay);
+  const shouldShowFallbackCheckin = !!checkinInfo?.isEligible;
+  const shouldShowFloatingCheckin = !!(checkinInfo?.isEligible && checkinInfo?.canClaimToday && !checkinDismissed);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -200,26 +247,32 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Daily Check-in Card (with Gold Shimmer styling) */}
-        {!isVip && checkinInfo?.canClaim && (
-          <View style={styles.checkinCard}>
-            <View style={styles.checkinContent}>
-              <Text style={styles.checkinTitle}>Daily check-in</Text>
-              <Text style={styles.checkinSub}>
-                Claim {checkinInfo.coinsIfClaim} free coins today
+        {shouldShowFallbackCheckin && (
+          <Pressable style={styles.checkinEntryCard} onPress={() => setCheckinModalVisible(true)}>
+            <View style={styles.checkinEntryIcon}>
+              <Ionicons
+                name={checkinInfo?.canClaimToday ? 'gift' : 'calendar-outline'}
+                size={18}
+                color={theme.colors.accentGoldLight}
+              />
+            </View>
+            <View style={styles.checkinEntryContent}>
+              <Text style={styles.checkinEntryTitle}>Daily Check-in</Text>
+              <Text style={styles.checkinEntrySub}>
+                {checkinInfo?.canClaimToday
+                  ? `Day ${selectedDefaultDay} is ready for +${selectedDayCard?.coins || 0} coins`
+                  : checkinInfo?.claimedToday
+                    ? 'Today is claimed. Open to view the 7-day track.'
+                    : 'Your 7-day reward track is active.'}
               </Text>
             </View>
-            <TouchableOpacity onPress={claimCheckin} style={styles.checkinBtnContainer}>
-              <LinearGradient
-                colors={theme.gradients.gold}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.checkinBtn}
-              >
-                <Text style={styles.checkinBtnText}>Claim</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+            <View style={styles.checkinEntryAction}>
+              <Text style={styles.checkinEntryActionText}>
+                {checkinInfo?.canClaimToday ? 'Claim' : 'Open'}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+            </View>
+          </Pressable>
         )}
 
         {/* Stats Bento Card */}
@@ -352,6 +405,21 @@ export default function ProfileScreen({ navigation }) {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      <DailyCheckinModal
+        visible={checkinModalVisible}
+        status={checkinInfo}
+        onClose={() => setCheckinModalVisible(false)}
+        onClaim={claimCheckin}
+      />
+
+      {shouldShowFloatingCheckin && (
+        <FloatingCheckinButton
+          coins={selectedDayCard?.coins || 0}
+          onPress={() => setCheckinModalVisible(true)}
+          onDismiss={dismissFloatingCheckin}
+        />
+      )}
     </View>
   );
 }
@@ -445,7 +513,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.02)',
   },
   wealthText: { fontSize: 11, fontWeight: '700', fontFamily: theme.typography.fontBody },
-  checkinCard: {
+  checkinEntryCard: {
     marginTop: 16,
     padding: 16,
     borderRadius: 16,
@@ -454,20 +522,41 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.borderGlass,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  checkinContent: { flex: 1, marginRight: 12 },
-  checkinTitle: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary, fontFamily: theme.typography.fontDisplay },
-  checkinSub: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 3, fontFamily: theme.typography.fontBody },
-  checkinBtnContainer: { minWidth: 80 },
-  checkinBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
+  checkinEntryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(201,168,76,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkinBtnText: { color: '#3A2E00', fontWeight: '800', fontSize: 13, fontFamily: theme.typography.fontBody },
+  checkinEntryContent: { flex: 1 },
+  checkinEntryTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontDisplay,
+  },
+  checkinEntrySub: {
+    marginTop: 3,
+    fontSize: 12,
+    lineHeight: 18,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontBody,
+  },
+  checkinEntryAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  checkinEntryActionText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme.colors.accentGoldLight,
+    fontFamily: theme.typography.fontBody,
+  },
   statsRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: theme.colors.bgSecondary,

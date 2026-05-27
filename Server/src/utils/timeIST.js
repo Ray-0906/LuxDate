@@ -13,3 +13,29 @@ export function getStartOfTomorrowIST() {
     .startOf('day')
     .toJSDate();
 }
+
+export function getStartOfTodayIST() {
+  return DateTime.now()
+    .setZone(TZ)
+    .startOf('day')
+    .toJSDate();
+}
+
+export function getEndOfTodayIST() {
+  return DateTime.now()
+    .setZone(TZ)
+    .endOf('day')
+    .toJSDate();
+}
+
+export function toISTDateKey(date) {
+  return DateTime.fromJSDate(new Date(date), { zone: 'utc' })
+    .setZone(TZ)
+    .toFormat('yyyy-MM-dd');
+}
+
+export function toISTStartOfDay(date) {
+  return DateTime.fromJSDate(new Date(date), { zone: 'utc' })
+    .setZone(TZ)
+    .startOf('day');
+}

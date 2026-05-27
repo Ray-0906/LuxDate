@@ -4,7 +4,13 @@ import DailyCheckin from '../models/DailyCheckin.js';
 import VipSubscription from '../models/VipSubscription.js';
 import mongoose from 'mongoose';
 import { COIN_TX_TYPES } from '../utils/constants.js';
-import { getTodayIST, getStartOfTomorrowIST } from '../utils/timeIST.js';
+import {
+  getTodayIST,
+  getStartOfTomorrowIST,
+  getStartOfTodayIST,
+  getEndOfTodayIST,
+  toISTStartOfDay,
+} from '../utils/timeIST.js';
 import appSettingService from '../services/appSetting.service.js';
 import env from '../config/env.js';
 import logger from '../utils/logger.js';
@@ -49,6 +55,30 @@ function normalizeClaimedDayNumbers(sub) {
   if (claimed.length) return [...new Set(claimed)].sort((a, b) => a - b);
   const legacyCount = Math.max(0, Number(sub?.dailyCheckinsClaimed) || 0);
   return Array.from({ length: legacyCount }, (_, idx) => idx + 1);
+}
+
+const NEW_USER_CHECKIN_WINDOW_DAYS = 7;
+
+function serializeDateOrNull(value) {
+  return value ? new Date(value).toISOString() : null;
+}
+
+function getNewUserWindowMeta(user) {
+  const start = toISTStartOfDay(user?.createdAt || new Date());
+  const today = toISTStartOfDay(new Date());
+  const elapsedDays = Math.floor(today.diff(start, 'days').days) + 1;
+  const currentDayNumber = Math.max(1, elapsedDays);
+  const lastDayNumber = Math.min(NEW_USER_CHECKIN_WINDOW_DAYS, Math.max(0, currentDayNumber));
+  const isExpired = currentDayNumber > NEW_USER_CHECKIN_WINDOW_DAYS;
+  const windowExpiresAt = start.plus({ days: NEW_USER_CHECKIN_WINDOW_DAYS }).toJSDate();
+  return {
+    start,
+    currentDayNumber,
+    lastUnlockedDay: lastDayNumber,
+    isExpired,
+    windowStartedAt: start.toJSDate(),
+    windowExpiresAt,
+  };
 }
 
 /**
@@ -137,76 +167,73 @@ const MonetizationController = {
   },
 
   async getCheckinStatus(userId) {
-    const today = getTodayIST();
-    const now = new Date();
-    const claimedToday = await DailyCheckin.findOne({ userId, date: today }).lean();
-    const freeCoins = await this.getFreeCheckinCoins();
+    const [user, rewards, claimedRows, claimedToday] = await Promise.all([
+      User.findById(userId).select('createdAt').lean(),
+      appSettingService.getNewUserCheckinRewards(),
+      DailyCheckin.find({ userId, source: 'new_user' }).select('dayNumber claimedAt').lean(),
+      DailyCheckin.findOne({
+        userId,
+        source: 'new_user',
+        claimedAt: {
+          $gte: getStartOfTodayIST(),
+          $lte: getEndOfTodayIST(),
+        },
+      }).lean(),
+    ]);
 
-    const subs = await VipSubscription.find({
-      userId,
-      status: 'active',
-      expiresAt: { $gt: now },
-    }).populate('planId').lean();
+    if (!user) throw new Error('User not found');
 
-    if (!subs.length) {
+    const windowMeta = getNewUserWindowMeta(user);
+    const claimedByDay = new Map(
+      claimedRows
+        .filter((row) => Number.isInteger(row?.dayNumber))
+        .map((row) => [row.dayNumber, row])
+    );
+
+    const days = Array.from({ length: NEW_USER_CHECKIN_WINDOW_DAYS }).map((_, index) => {
+      const day = index + 1;
+      const claimed = claimedByDay.get(day);
+      let status = 'locked';
+      if (claimed) {
+        status = 'claimed';
+      } else if (windowMeta.isExpired) {
+        status = 'expired';
+      } else if (day <= windowMeta.lastUnlockedDay) {
+        status = 'claimable';
+      }
+
       return {
-        canClaim: !claimedToday || claimedToday?.source !== 'free_login',
-        alreadyClaimed: claimedToday?.source === 'free_login',
-        isVipCheckin: false,
-        coinsIfClaim: claimedToday?.source === 'free_login' ? 0 : freeCoins,
-        nextCheckinAt: claimedToday?.source === 'free_login' ? getStartOfTomorrowIST() : null,
-        errorCode: null,
-        subscriptions: [],
+        day,
+        coins: rewards[index] || 0,
+        status,
+        claimedAt: serializeDateOrNull(claimed?.claimedAt),
       };
-    }
+    });
 
-    const todayStartMs = new Date(now).setHours(0, 0, 0, 0);
-    const subscriptions = subs
-      .filter((sub) => sub?.planId)
-      .map((sub) => {
-        const startedAtMs = new Date(sub.createdAt || now).setHours(0, 0, 0, 0);
-        const elapsedDays = Math.max(
-          1,
-          Math.floor((todayStartMs - startedAtMs) / 86400000) + 1
-        );
-        const unlockedDays = Math.min(sub.totalDays, elapsedDays);
-        const claimedDayNumbers = normalizeClaimedDayNumbers(sub).filter((day) => day <= sub.totalDays);
-        const claimedDays = claimedDayNumbers.length;
-        const remainingCheckins = Math.max(0, sub.totalDays - claimedDays);
-        const unlockedUnclaimedDays = [];
-        for (let day = 1; day <= unlockedDays; day += 1) {
-          if (!claimedDayNumbers.includes(day)) unlockedUnclaimedDays.push(day);
-        }
-        const canClaimNow = unlockedUnclaimedDays.length > 0;
-
-        return {
-          subscriptionId: toIdString(sub._id),
-          planId: toIdString(sub.planId?._id),
-          planName: sub.planId?.name,
-          checkinCoins: sub.planId?.dailyCheckinCoins || 0,
-          remainingCheckins,
-          canClaimNow,
-          canClaimToday: canClaimNow,
-          claimedDayNumbers,
-          unlockedDays,
-          unlockedUnclaimedDays,
-        };
-      });
-
-    const claimable = subscriptions.find((entry) => entry.canClaimNow);
-    const fullyExhausted = subscriptions.every((entry) => entry.remainingCheckins <= 0);
+    const claimableDays = days
+      .filter((day) => day.status === 'claimable')
+      .map((day) => day.day);
+    const canClaimToday = !windowMeta.isExpired && !claimedToday && claimableDays.length > 0;
+    const selectedDefaultDay = claimableDays[0] || null;
 
     return {
-      canClaim: !!claimable,
-      alreadyClaimed: false,
-      isVipCheckin: true,
-      coinsIfClaim: claimable?.checkinCoins || 0,
-      nextCheckinAt: claimable ? null : getStartOfTomorrowIST(),
-      remainingCheckins: subscriptions.reduce((sum, entry) => sum + entry.remainingCheckins, 0),
-      canUpgradeFromFree: false,
-      errorCode: fullyExhausted ? 'all_vip_checkins_exhausted' : null,
-      subscriptions,
-      requiresSubscriptionSelection: subscriptions.length > 1,
+      isEligible: !windowMeta.isExpired,
+      todayKey: getTodayIST(),
+      windowStartedAt: serializeDateOrNull(windowMeta.windowStartedAt),
+      windowExpiresAt: serializeDateOrNull(windowMeta.windowExpiresAt),
+      currentDayNumber: Math.min(windowMeta.currentDayNumber, NEW_USER_CHECKIN_WINDOW_DAYS),
+      claimedToday: !!claimedToday,
+      canClaimToday,
+      selectedDefaultDay,
+      claimableDayNumbers: claimableDays,
+      days,
+      nextCheckinAt: canClaimToday || windowMeta.isExpired ? null : getStartOfTomorrowIST(),
+      canClaim: canClaimToday,
+      alreadyClaimed: !!claimedToday,
+      coinsIfClaim: selectedDefaultDay ? days[selectedDefaultDay - 1]?.coins || 0 : 0,
+      isVipCheckin: false,
+      errorCode: windowMeta.isExpired ? 'new_user_checkin_expired' : null,
+      subscriptions: [],
     };
   },
 
@@ -256,7 +283,10 @@ const MonetizationController = {
         };
       }
 
-      const todayRecord = await maybeSession(DailyCheckin.findOne({ userId, date: today }), session);
+      const todayRecord = await maybeSession(
+        DailyCheckin.findOne({ userId, date: today, source: 'vip_plan' }),
+        session
+      );
       if (targetSub) {
         const plan = targetSub.planId;
         const claimedDayNumbers = normalizeClaimedDayNumbers(targetSub).filter((day) => day <= targetSub.totalDays);
@@ -316,7 +346,7 @@ const MonetizationController = {
         let dayDoc = todayRecord;
         if (!dayDoc) {
           const query = DailyCheckin.findOneAndUpdate(
-            { userId, date: today },
+            { userId, date: today, source: 'vip_plan' },
             {
               $setOnInsert: {
                 userId,
@@ -369,8 +399,25 @@ const MonetizationController = {
         };
       }
 
-      // Free login check-in (no VIP sub selected/active)
-      if (todayRecord?.source === 'free_login') {
+      const user = await maybeSession(
+        User.findById(userId).select('createdAt coinBalance'),
+        session
+      );
+      if (!user) throw new Error('User not found');
+
+      const rewards = await appSettingService.getNewUserCheckinRewards();
+      const claimedTodayNewUser = await maybeSession(
+        DailyCheckin.findOne({
+          userId,
+          source: 'new_user',
+          claimedAt: {
+            $gte: getStartOfTodayIST(),
+            $lte: getEndOfTodayIST(),
+          },
+        }),
+        session
+      );
+      if (claimedTodayNewUser) {
         return {
           success: false,
           error: 'already_claimed_today',
@@ -379,42 +426,77 @@ const MonetizationController = {
         };
       }
 
-      const coinsToAward = await this.getFreeCheckinCoins();
-      const dayDoc = await DailyCheckin.findOneAndUpdate(
-        { userId, date: today },
-        {
-          $setOnInsert: {
-            userId,
-            date: today,
-            source: 'free_login',
-            coinsAwarded: coinsToAward,
-          },
-        },
-        session ? { new: true, upsert: true, session } : { new: true, upsert: true }
-      );
-      dayDoc.source = 'free_login';
-      dayDoc.coinsAwarded = coinsToAward;
-      dayDoc.subscriptionId = null;
-      dayDoc.planId = null;
+      const windowMeta = getNewUserWindowMeta(user);
+      if (windowMeta.isExpired) {
+        return {
+          success: false,
+          error: 'new_user_checkin_expired',
+          message: 'Your 7-day check-in window has expired',
+          nextCheckinAt: null,
+        };
+      }
 
-      const referenceId = `free:${userId}:${today}`;
+      const requestedDayRaw = context?.dayNumber ?? context?.day ?? null;
+      const dayNumber = Number(requestedDayRaw);
+      if (!Number.isInteger(dayNumber) || dayNumber < 1 || dayNumber > NEW_USER_CHECKIN_WINDOW_DAYS) {
+        return {
+          success: false,
+          error: 'invalid_day',
+          message: 'Invalid check-in day selected',
+        };
+      }
+
+      if (dayNumber > windowMeta.lastUnlockedDay) {
+        return {
+          success: false,
+          error: 'checkin_not_unlocked',
+          message: 'This check-in day is not unlocked yet',
+        };
+      }
+
+      const existingDayClaim = await maybeSession(
+        DailyCheckin.findOne({ userId, source: 'new_user', dayNumber }),
+        session
+      );
+      if (existingDayClaim) {
+        return {
+          success: false,
+          error: 'day_already_claimed',
+          message: `Day ${dayNumber} is already claimed`,
+        };
+      }
+
+      const coinsToAward = rewards[dayNumber - 1] || 0;
+      const dayDoc = await DailyCheckin.create([{
+        userId,
+        date: today,
+        source: 'new_user',
+        dayNumber,
+        coinsAwarded: coinsToAward,
+        claimedAt: new Date(),
+      }], session ? { session } : undefined);
+
+      const referenceId = `new_user:${userId}:day:${dayNumber}`;
       const grant = await this.grantCoins(
         userId,
         coinsToAward,
         COIN_TX_TYPES.CHECKIN,
         referenceId,
-        'Daily check-in (free login)',
+        `New-user daily check-in (Day ${dayNumber})`,
         { session, idempotent: true }
       );
-      dayDoc.coinTransactionId = grant.coinTransactionId;
-      await saveWithOptionalSession(dayDoc, session);
+      dayDoc[0].coinTransactionId = grant.coinTransactionId;
+      await saveWithOptionalSession(dayDoc[0], session);
 
       return {
         success: true,
         coins: coinsToAward,
-        source: 'free_login',
+        source: 'new_user',
+        dayNumber,
         newBalance: grant.coinBalance,
         alreadyClaimed: false,
+        todayKey: today,
+        selectedDefaultDay: null,
       };
     };
 

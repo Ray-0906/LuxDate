@@ -12,8 +12,14 @@ const dailyCheckinSchema = new mongoose.Schema(
     },
     source: {
       type: String,
-      enum: ['vip_plan', 'free_login'],
+      enum: ['vip_plan', 'free_login', 'new_user'],
       required: true,
+    },
+    dayNumber: {
+      type: Number,
+      min: 1,
+      max: 7,
+      default: null,
     },
     subscriptionId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -59,8 +65,15 @@ const dailyCheckinSchema = new mongoose.Schema(
   }
 );
 
-// One check-in per user per day
-dailyCheckinSchema.index({ userId: 1, date: 1 }, { unique: true });
+// VIP rows keep one aggregate record per user/date, while new-user rows are per reward slot.
+dailyCheckinSchema.index(
+  { userId: 1, date: 1, source: 1 },
+  { unique: true, partialFilterExpression: { source: 'vip_plan' } }
+);
+dailyCheckinSchema.index(
+  { userId: 1, source: 1, dayNumber: 1 },
+  { unique: true, partialFilterExpression: { source: 'new_user' } }
+);
 
 const DailyCheckin = mongoose.model('DailyCheckin', dailyCheckinSchema);
 export default DailyCheckin;

@@ -21,7 +21,7 @@ const adminSettingsController = {
   },
   async saveAppSettings(req, res, next) {
     try {
-      const { appName, nonVipRate, vipRate } = req.body;
+      const { appName, nonVipRate, vipRate, checkinRewards = [] } = req.body;
       const settings = await appSettingService.setMany([
         {
           key: 'app_name',
@@ -41,6 +41,12 @@ const adminSettingsController = {
           group: 'calls',
           description: 'Coins per minute of video call for VIP users',
         },
+        ...Array.from({ length: 7 }).map((_, index) => ({
+          key: `checkin_day_${index + 1}_coins`,
+          value: Number(checkinRewards[index]),
+          group: 'coins',
+          description: `New-user check-in reward for Day ${index + 1}`,
+        })),
       ]);
       return ApiResponse.success(res, { data: { settings }, message: 'App settings saved' });
     } catch (e) { next(e); }

@@ -37,6 +37,7 @@ export default function SettingsPage() {
     appName: 'LuxDate',
     nonVipRate: '10',
     vipRate: '7',
+    checkinRewards: ['5', '10', '15', '20', '25', '30', '50'],
   });
   const [brandingForm, setBrandingForm] = useState({
     logoUrl: '',
@@ -47,7 +48,7 @@ export default function SettingsPage() {
     load();
   }, []);
 
-  const load = async () => {
+  async function load() {
     setLoading(true);
     try {
       const res = await settingsApi.getAll();
@@ -57,6 +58,9 @@ export default function SettingsPage() {
         appName: String(findValue(list, 'app_name', 'LuxDate')),
         nonVipRate: String(findValue(list, 'call_cost_per_minute_non_vip', findValue(list, 'call_cost_per_minute', 10))),
         vipRate: String(findValue(list, 'call_cost_per_minute_vip', 7)),
+        checkinRewards: Array.from({ length: 7 }).map((_, index) => (
+          String(findValue(list, `checkin_day_${index + 1}_coins`, [5, 10, 15, 20, 25, 30, 50][index]))
+        )),
       });
       setBrandingForm({
         logoUrl: String(findValue(list, 'app_logo_url', '')),
@@ -66,7 +70,7 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   const brandingRevision = useMemo(
     () => findValue(settings, 'app_branding_revision', '1'),
@@ -81,6 +85,7 @@ export default function SettingsPage() {
         appName: appForm.appName.trim() || 'LuxDate',
         nonVipRate: Number(appForm.nonVipRate),
         vipRate: Number(appForm.vipRate),
+        checkinRewards: appForm.checkinRewards.map((value) => Number(value)),
       });
       toast.success('App settings saved');
       await load();
@@ -219,6 +224,29 @@ export default function SettingsPage() {
 
             <div style={{ color: 'var(--text-dim)', fontSize: 13 }}>
               Live preview: non-VIP users spend <strong>{appForm.nonVipRate || '0'}</strong> points/min and VIP users spend <strong>{appForm.vipRate || '0'}</strong> points/min.
+            </div>
+
+            <div>
+              <h4 style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>New-user 7-day check-in rewards</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+                {appForm.checkinRewards.map((value, index) => (
+                  <div key={`checkin-${index + 1}`}>
+                    <label style={labelStyle}>Day {index + 1}</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={value}
+                      onChange={(e) => setAppForm((prev) => {
+                        const nextRewards = [...prev.checkinRewards];
+                        nextRewards[index] = e.target.value;
+                        return { ...prev, checkinRewards: nextRewards };
+                      })}
+                      style={inputStyle}
+                      placeholder="0"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div>
