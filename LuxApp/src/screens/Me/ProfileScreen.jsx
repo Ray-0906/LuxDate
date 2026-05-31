@@ -88,14 +88,8 @@ export default function ProfileScreen({ navigation }) {
 
   const claimCheckin = async (dayNumber) => {
     try {
-      const res = await coinsApi.checkinClaim({ dayNumber });
+      const res = await coinsApi.checkinClaim({ dayNumber, source: 'new_user' });
       const d = res.data?.data;
-      if (!d?.success && d?.error === 'already_claimed_today') {
-        await loadProfile();
-        await refreshCheckinStatus();
-        Alert.alert('Check-in', 'Already claimed today. Come back tomorrow!');
-        return { success: false };
-      }
       if (!d?.success) {
         Alert.alert('Check-in', d?.message || 'Unable to claim');
         return { success: false };
@@ -260,10 +254,8 @@ export default function ProfileScreen({ navigation }) {
               <Text style={styles.checkinEntryTitle}>Daily Check-in</Text>
               <Text style={styles.checkinEntrySub}>
                 {checkinInfo?.canClaimToday
-                  ? `Day ${selectedDefaultDay} is ready for +${selectedDayCard?.coins || 0} coins`
-                  : checkinInfo?.claimedToday
-                    ? 'Today is claimed. Open to view the 7-day track.'
-                    : 'Your 7-day reward track is active.'}
+                  ? `${checkinInfo?.claimableDayNumbers?.length} unlocked reward(s) ready`
+                  : 'All unlocked rewards are claimed. Check back tomorrow.'}
               </Text>
             </View>
             <View style={styles.checkinEntryAction}>

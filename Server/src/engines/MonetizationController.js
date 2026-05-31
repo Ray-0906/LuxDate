@@ -213,7 +213,7 @@ const MonetizationController = {
     const claimableDays = days
       .filter((day) => day.status === 'claimable')
       .map((day) => day.day);
-    const canClaimToday = !windowMeta.isExpired && !claimedToday && claimableDays.length > 0;
+    const canClaimToday = !windowMeta.isExpired && claimableDays.length > 0;
     const selectedDefaultDay = claimableDays[0] || null;
 
     return {
@@ -229,7 +229,7 @@ const MonetizationController = {
       days,
       nextCheckinAt: canClaimToday || windowMeta.isExpired ? null : getStartOfTomorrowIST(),
       canClaim: canClaimToday,
-      alreadyClaimed: !!claimedToday,
+      alreadyClaimed: false, // Legacy field, setting to false
       coinsIfClaim: selectedDefaultDay ? days[selectedDefaultDay - 1]?.coins || 0 : 0,
       isVipCheckin: false,
       errorCode: windowMeta.isExpired ? 'new_user_checkin_expired' : null,
@@ -254,7 +254,9 @@ const MonetizationController = {
       );
 
       let targetSub = null;
-      if (requestedSubscriptionId) {
+      if (context?.source === 'new_user') {
+        targetSub = null;
+      } else if (requestedSubscriptionId) {
         targetSub = activeSubs.find((sub) => String(sub._id) === String(requestedSubscriptionId));
         if (!targetSub) {
           return {
@@ -406,25 +408,6 @@ const MonetizationController = {
       if (!user) throw new Error('User not found');
 
       const rewards = await appSettingService.getNewUserCheckinRewards();
-      const claimedTodayNewUser = await maybeSession(
-        DailyCheckin.findOne({
-          userId,
-          source: 'new_user',
-          claimedAt: {
-            $gte: getStartOfTodayIST(),
-            $lte: getEndOfTodayIST(),
-          },
-        }),
-        session
-      );
-      if (claimedTodayNewUser) {
-        return {
-          success: false,
-          error: 'already_claimed_today',
-          message: 'Already claimed today',
-          nextCheckinAt: getStartOfTomorrowIST(),
-        };
-      }
 
       const windowMeta = getNewUserWindowMeta(user);
       if (windowMeta.isExpired) {

@@ -180,13 +180,13 @@ const PulsingDayCard = ({ isClaimed, isTodayClaimable, isUnlocked, isLocked, day
 
   if (isClaimed) {
     return (
-      <Pressable onPress={onPress} style={[styles.dayCard, styles.dayCardClaimed]}>
+      <View style={[styles.dayCard, styles.dayCardClaimed]}>
         <View style={styles.claimedOverlay}>
           <Ionicons name="checkmark-circle" size={20} color={theme.colors.accentGreen} />
         </View>
         <Text style={styles.dayLabel}>Day {dayReward.day}</Text>
         <Text style={styles.dayCoinsMuted}>+{dayReward.coins}</Text>
-      </Pressable>
+      </View>
     );
   }
 

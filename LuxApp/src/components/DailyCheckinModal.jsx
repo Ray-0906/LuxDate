@@ -97,13 +97,9 @@ export default function DailyCheckinModal({
 
   const headlineText = !status?.isEligible
     ? 'Your 7-day welcome rewards have expired.'
-    : status?.claimedToday
-      ? 'Today’s reward is already claimed. Check back tomorrow.'
-      : claimableDays.length > 1
-        ? `${claimableDays.length} days are unlocked. You can claim one today.`
-        : claimableDays.length === 1
-          ? `Day ${claimableDays[0].day} is ready to claim now.`
-          : 'More rewards will unlock on upcoming days.';
+    : claimableDays.length > 0
+      ? `${claimableDays.length} unlocked reward${claimableDays.length > 1 ? 's are' : ' is'} ready to claim.`
+      : 'All unlocked rewards are claimed. Check back tomorrow.';
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -233,7 +229,7 @@ export default function DailyCheckinModal({
               <View style={styles.infoCardSuccess}>
                 <Ionicons name="checkmark-circle" size={18} color={GREEN} />
                 <Text style={styles.infoCardSuccessText}>
-                  Day {successDay} claimed. Come back tomorrow for the next reward.
+                  Day {successDay} claimed successfully.
                 </Text>
               </View>
             ) : null}
@@ -241,7 +237,7 @@ export default function DailyCheckinModal({
             <View style={styles.infoCard}>
               <Text style={styles.infoTitle}>How it works</Text>
               <Text style={styles.infoBody}>
-                Missed days stay claimable while the 7-day signup window is active. You can collect one unlocked day per IST day.
+                Missed days stay claimable while the 7-day signup window is active. All unlocked days can be collected at any time.
               </Text>
             </View>
           </ScrollView>
